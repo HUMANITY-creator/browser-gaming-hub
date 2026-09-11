@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skyline Shuttle</title>
+    <link rel="stylesheet" href="src/style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header><span class="mark">✦</span><div><p class="eyebrow">MISTRAL COAST TRANSIT AUTHORITY</p><h1>SKYLINE SHUTTLE</h1></div><div class="clock" id="clock">06:30</div></header>
+      <section class="game-wrap" aria-label="Skyline Shuttle game">
+        <canvas id="game" width="960" height="540" aria-label="Playable city map"></canvas>
+        <aside class="hud">
+          <div class="card"><p class="label">CURRENT RUN</p><h2 id="missionTitle">Terminal transfer</h2><p id="missionText">Reach the airport dispatch beacon.</p></div>
+          <div class="card status"><span>MODE</span><strong id="mode">ON FOOT</strong><span class="separator"></span><span>LOCATION</span><strong id="location">HARBOUR</strong></div>
+        </aside>
+        <div class="prompt" id="prompt" hidden></div>
+        <aside class="phone" aria-label="Personal phone">
+          <p class="label">LUMA LINK · ARI SOL</p>
+          <strong id="relationship">DATING · TRUST 62</strong>
+          <p id="reply">Good luck on your airport run. Call when you are free.</p>
+          <button id="voiceButton" type="button">Enable hands-free voice</button>
+          <small id="voiceStatus">Uses your browser’s microphone permission. Nothing is uploaded.</small>
+        </aside>
+      </section>
+      <footer><span><kbd>WASD</kbd> move &nbsp; <kbd>E</kbd> enter / exit vehicle &nbsp; voice stays on until toggled off</span><span>Original interactive prototype · No third-party assets</span></footer>
+    </main>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
