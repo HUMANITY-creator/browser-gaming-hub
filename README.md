@@ -8,26 +8,25 @@ This is intentionally an original setting and is not affiliated with, inspired b
 
 - Vanilla JavaScript ES modules for gameplay logic
 - HTML Canvas 2D for the original map, characters, vehicle, and UI rendering
-- Vite for local development and production builds
+- A zero-dependency Python static server for local development and a Node static-file build script
 - Node's built-in test runner for gameplay-state tests
 
 ## Install and run
 
-Requires Node.js 20.19+ or 22.12+ (the Vite requirement).
+Requires Node.js 18+ for tests/build and Python 3 for the local server. No `npm install` is required.
 
 ```bash
-npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Use **WASD** to walk/drive, approach the yellow Sunbeam shuttle, press **E** to enter, and drive north-east into Mistral Airport.
+Keep that terminal running, then open **http://localhost:5173/** in the *same computer/browser profile*. A connection-refused page means no development server is currently running on that computer or its terminal was closed. Use **WASD** to walk/drive, approach the yellow Sunbeam shuttle, press **E** to enter, and drive north-east into Mistral Airport.
 
 ## Commands
 
 ```bash
-npm run dev       # local development server
-npm run build     # production build in dist/
-npm run preview   # serve the production build
+npm run dev       # local development server at http://localhost:5173/
+npm run build     # copy a production build into dist/
+npm run preview   # serve the production build at http://localhost:4173/
 npm test          # gameplay state tests
 ```
 

@@ -1,7 +1,6 @@
 import { airport, createGameState, formatTime, move, nearVehicle, toggleVehicle, advanceTime } from './game.js';
 import { respondToMessage } from './social.js';
 import { CITY_POPULATION, getVisibleCitizens } from './crowd.js';
-import './style.css';
 
 const canvas = document.querySelector('#game'); const ctx = canvas.getContext('2d');
 const state = createGameState(); const keys = new Set();
