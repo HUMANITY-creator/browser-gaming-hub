@@ -21,6 +21,12 @@ npm run dev
 
 Keep that terminal running, then open **http://localhost:5173/** in the *same computer/browser profile*. A connection-refused page means no development server is currently running on that computer or its terminal was closed. Use **WASD** to walk/drive, approach the yellow Sunbeam shuttle, press **E** to enter, and drive north-east into Mistral Airport.
 
+## Easiest way to play: a shareable web link
+
+This repository includes a GitHub Pages deployment workflow. After the repository is pushed to GitHub, open the repository’s **Actions** tab and wait for **Deploy game to GitHub Pages** to finish. Its deployment page shows the clickable live website link. You only need to do this once per update; anyone can then open that link in a browser—no terminal, Python, or localhost required.
+
+If Pages has not been enabled for the repository yet, open **Settings → Pages** and choose **GitHub Actions** as the source. The link normally has the form `https://YOUR-GITHUB-NAME.github.io/YOUR-REPOSITORY-NAME/`.
+
 ## Commands
 
 ```bash
