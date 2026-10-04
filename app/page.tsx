@@ -1,66 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-const cars = [
-  {left:"48%",top:"56%",type:"sport"},
-  {left:"63%",top:"48%",type:"sedan"},
-  {left:"72%",top:"63%",type:"suv"},
-  {left:"36%",top:"68%",type:"taxi"},
-];
-
+import {useEffect,useState} from "react";
+const SCENE="data:image/webp;base64,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";
 export default function Home(){
-  const [money,setMoney]=useState(2450);
-  const [mission,setMission]=useState("Go to the local job center");
-  const [streetCred,setStreetCred]=useState(0);
-  const [time,setTime]=useState("7:42 PM");
-
-  useEffect(()=>{
-    const t=setInterval(()=>{
-      const d=new Date();
-      setTime(d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}));
-    },30000);
-    return()=>clearInterval(t);
-  },[]);
-
-  const interact=()=>{
-    setMoney(v=>v+250);
-    setStreetCred(v=>Math.min(100,v+10));
-    setMission("Job accepted — get to the meeting point");
-  };
-
-  return (
-    <main className="cityline-game">
-      <section className="city-scene" aria-label="CITYLINE downtown">
-        <div className="sky"/><div className="sunset-glow"/>
-        <div className="skyline">
-          {Array.from({length:13}).map((_,i)=><div className="tower" key={i} style={{height:(120+(i*47)%260)+"px"}}><i/><i/><i/></div>)}
-        </div>
-        <div className="palms left"><b/><b/><b/></div><div className="palms right"><b/><b/><b/></div>
-        <div className="street">
-          <div className="sidewalk leftwalk"/><div className="sidewalk rightwalk"/>
-          <div className="road-lane lane-one"/><div className="road-lane lane-two"/><div className="road-line"/>
-          <div className="building-front cafe"><strong>SUNSET</strong><span>BAR & GRILL</span></div>
-          <div className="building-front shop">NORTHSIDE MARKET</div>
-          {cars.map((car,i)=><div key={i} className={"city-car "+car.type} style={{left:car.left,top:car.top}}><span/><b/></div>)}
-          <div className="pedestrian woman"/><div className="pedestrian man"/>
-          <div className="player-character">
-            <div className="character-shadow"/><div className="character-body"><div className="hood"/><div className="backpack"/><div className="arm left-arm"/><div className="arm right-arm"/></div>
-            <div className="character-head"><div className="hair"/></div>
-          </div>
-        </div>
-        <div className="brand">CITYLINE <small>PLAY NOW</small></div>
-        <div className="hud money"><b>◉</b> ${money.toLocaleString()}<div className="level">Level 1 <span><i style={{width:"9%"}}/></span> <em>90/1,000</em></div></div>
-        <div className="hud missions"><strong>◆ &nbsp; First Steps</strong><p>• ${mission}</p><strong>✦ &nbsp; Street Cred</strong><p>• Complete 2 side missions<br/> &nbsp; (${Math.floor(streetCred/50)}/2)</p></div>
-        <div className="controls"><b>W</b> Move Forward <b>S</b> Move Backward <b>A</b> Left <b>D</b> Right <b>Shift</b> Sprint <b>E</b> Interact <b>F</b> Enter/Exit Vehicle</div>
-        <div className="minimap"><span className="you">▲</span><i className="home">⌂</i><i className="job">◆</i><i className="carpin">●</i></div>
-        <div className="location">⌖ Downtown <span>♣ 0.6 mi</span></div>
-        <div className="phone"><div className="phone-top"><span>${time}</span><span>● ◔ ▰</span></div><h3>Messages</h3>
-          <div className="msg"><b>J</b><span><strong>Jay</strong>You free later?</span></div><div className="msg"><b>M</b><span><strong>Mom</strong>Dinner at 7. Lmk.</span></div><div className="msg"><b>✦</b><span><strong>Job Center</strong>New job opportunity available!</span></div>
-          <div className="phone-apps"><button>☎</button><button>✉</button><button>⌖</button><button>⚙</button></div>
-        </div>
-        <button className="mission-action" onClick={interact}>INTERACT <span>→</span></button>
-      </section>
-    </main>
-  );
+  const [cash,setCash]=useState(2450);
+  const [message,setMessage]=useState("Jay: you free later?");
+  const [pan,setPan]=useState({x:0,y:0});
+  useEffect(()=>{const down=(e:KeyboardEvent)=>{if(!["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(e.key.toLowerCase()))return;e.preventDefault();setPan(p=>({x:p.x+(["d","arrowright"].includes(e.key.toLowerCase())?-1:0)+(["a","arrowleft"].includes(e.key.toLowerCase())?1:0),y:p.y+(["s","arrowdown"].includes(e.key.toLowerCase())?-1:0)+(["w","arrowup"].includes(e.key.toLowerCase())?1:0)}))};addEventListener("keydown",down);return()=>removeEventListener("keydown",down)},[]);
+  const interact=()=>{setCash(v=>v+250);setMessage("Job Center: New job opportunity available!");};
+  return <main className="cityline">
+    <section className="scene" style={{backgroundImage:`url(${SCENE})`,backgroundPosition:`${50+pan.x*0.8}% ${50+pan.y*0.8}%`}}>
+      <div className="vignette"/>
+      <button className="interact" onClick={interact}>INTERACT <span>→</span></button>
+      <div className="cash">◉ <b>${cash.toLocaleString()}</b><small>Level 1</small><i><em/></i><small>90/1,000</small></div>
+      <div className="missions"><strong>◆ &nbsp; First Steps</strong><p>Go to the local job center</p><strong>✦ &nbsp; Street Cred</strong><p>Complete 2 side missions (0/2)</p></div>
+      <div className="controls"><b>W</b><span>Move</span><b>A</b><span>Left</span><b>S</b><span>Back</span><b>D</b><span>Right</span><b>E</b><span>Interact</span></div>
+      <div className="phone"><div className="phonebar">7:42 PM <span>● ◔ ▰</span></div><h3>Messages</h3><p><b>Jay</b> ${message}</p><p><b>Mom</b> Dinner at 7. Lmk.</p><p><b>Job Center</b> New job opportunity!</p></div>
+      <div className="badge">CITYLINE <small>PLAY NOW</small></div>
+    </section>
+  </main>;
 }
