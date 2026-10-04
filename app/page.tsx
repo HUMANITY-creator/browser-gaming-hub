@@ -106,8 +106,7 @@ export default function Home(){
       });
 
       if(!p.inCar){
-        ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fill();
-        ctx.strokeStyle="#65e6ff";ctx.lineWidth=3;ctx.beginPath();ctx.arc(p.x,p.y,17,0,Math.PI*2);ctx.stroke();
+        ctx.fillStyle="#c88a68";ctx.beginPath();ctx.arc(p.x,p.y-18,8,0,Math.PI*2);ctx.fill();ctx.fillStyle="#17151a";ctx.beginPath();ctx.arc(p.x,p.y-21,9,Math.PI,Math.PI*2);ctx.fill();ctx.fillStyle="#3f4650";ctx.fillRect(p.x-9,p.y-10,18,18);ctx.strokeStyle="#c88a68";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(p.x-8,p.y-5);ctx.lineTo(p.x-15,p.y+8);ctx.moveTo(p.x+8,p.y-5);ctx.lineTo(p.x+15,p.y+8);ctx.stroke();ctx.fillStyle="#20242b";ctx.fillRect(p.x-8,p.y+8,6,16);ctx.fillRect(p.x+2,p.y+8,6,16);
       }
 
       if(flash>0){flash-=dt;ctx.fillStyle="rgba(101,230,255,.08)";ctx.fillRect(0,0,2000,1400)}
