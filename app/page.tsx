@@ -84,7 +84,7 @@ export default function Home() {
         for(const e of s.echoes){
           const idx=Math.min(e.trail.length-1,Math.floor(s.t/LOOP*e.trail.length));
           const p=e.trail[idx];
-          if(dist(s.player,p)<24)end(false);
+          if(s.t>0.28 && dist(s.player,p)<24)end(false);
         }
       }
 
