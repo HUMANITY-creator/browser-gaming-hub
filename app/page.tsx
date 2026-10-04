@@ -2,420 +2,150 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type GameStatus = "idle" | "playing" | "gameover";
+const W = 900;
+const H = 520;
+const LOOP = 3.6;
+const SPEED = 190;
+type Point = { x: number; y: number };
+type Echo = { trail: Point[]; born: number; color: string };
 
-const GAME_WIDTH = 760;
-const GAME_HEIGHT = 420;
+const clamp = (v:number,a:number,b:number) => Math.max(a,Math.min(b,v));
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
+function dist(a:Point,b:Point){ return Math.hypot(a.x-b.x,a.y-b.y); }
 
-export default function HomePage() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const frameRef = useRef<number | null>(null);
-  const stateRef = useRef({
-    playerX: GAME_WIDTH / 2,
-    score: 0,
-    elapsed: 0,
-    status: "idle" as GameStatus,
-    obstacles: [] as Array<{ x: number; y: number; size: number; speed: number }>,
-    lastSpawn: 0,
-    keys: new Set<string>(),
+export default function Home() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const raf = useRef<number | null>(null);
+  const game = useRef({
+    running:false, won:false, t:0, player:{x:130,y:260},
+    start:{x:130,y:260}, goal:{x:770,y:260}, shard:{x:450,y:120,got:false},
+    keys:new Set<string>(), recording:[] as Point[], echoes:[] as Echo[],
+    lastX:130,lastY:260, pulse:0, score:0, best:0
   });
+  const [running,setRunning]=useState(false);
+  const [won,setWon]=useState(false);
+  const [score,setScore]=useState(0);
+  const [best,setBest]=useState(0);
+  const [echoCount,setEchoCount]=useState(0);
 
-  const [status, setStatus] = useState<GameStatus>("idle");
-  const [score, setScore] = useState(0);
-  const [best, setBest] = useState(0);
-  const [prompt, setPrompt] = useState("");
-  const [aiReply, setAiReply] = useState("Ask me for a game tip, a new idea, or help designing your next feature.");
-  const [aiBusy, setAiBusy] = useState(false);
-  const [tab, setTab] = useState<"play" | "ai" | "leaderboard">("play");
+  useEffect(()=>{ const b=Number(localStorage.getItem("afterimage-best")||0); setBest(b); game.current.best=b; },[]);
 
-  useEffect(() => {
-    const stored = Number(window.localStorage.getItem("gameforge-best") || 0);
-    setBest(stored);
-  }, []);
+  const reset=useCallback(()=>{
+    const s=game.current;
+    s.running=true; s.won=false; s.t=0; s.player={x:130,y:260}; s.start={x:130,y:260};
+    s.recording=[]; s.echoes=[]; s.pulse=0; s.score=0; s.shard={x:450,y:120,got:false};
+    setRunning(true); setWon(false); setScore(0); setEchoCount(0);
+  },[]);
 
-  const startGame = useCallback(() => {
-    stateRef.current = {
-      playerX: GAME_WIDTH / 2,
-      score: 0,
-      elapsed: 0,
-      status: "playing",
-      obstacles: [],
-      lastSpawn: 0,
-      keys: new Set(),
-    };
-    setScore(0);
-    setStatus("playing");
-  }, []);
-
-  const finishGame = useCallback(() => {
-    const current = Math.floor(stateRef.current.score);
-    stateRef.current.status = "gameover";
-    setStatus("gameover");
-    setScore(current);
-    setBest((old) => {
-      const next = Math.max(old, current);
-      window.localStorage.setItem("gameforge-best", String(next));
-      return next;
-    });
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const context = canvas.getContext("2d");
-    if (!context) return;
-
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = GAME_WIDTH * dpr;
-      canvas.height = GAME_HEIGHT * dpr;
-      canvas.style.aspectRatio = `${GAME_WIDTH}/${GAME_HEIGHT}`;
-      context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      stateRef.current.keys.add(event.key.toLowerCase());
-      if (["arrowleft", "arrowright", "a", "d", " "].includes(event.key.toLowerCase())) {
-        event.preventDefault();
-      }
-      if (event.key === " " && stateRef.current.status !== "playing") startGame();
-    };
-
-    const onKeyUp = (event: KeyboardEvent) => {
-      stateRef.current.keys.delete(event.key.toLowerCase());
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-
-    let last = performance.now();
-
-    const draw = (time: number) => {
-      const dt = Math.min((time - last) / 1000, 0.04);
-      last = time;
-      const state = stateRef.current;
-
-      context.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-      const background = context.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-      background.addColorStop(0, "#0b1020");
-      background.addColorStop(1, "#111827");
-      context.fillStyle = background;
-      context.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-      context.strokeStyle = "rgba(255,255,255,.05)";
-      context.lineWidth = 1;
-      for (let x = 0; x <= GAME_WIDTH; x += 38) {
-        context.beginPath();
-        context.moveTo(x, 0);
-        context.lineTo(x, GAME_HEIGHT);
-        context.stroke();
-      }
-      for (let y = 0; y <= GAME_HEIGHT; y += 38) {
-        context.beginPath();
-        context.moveTo(0, y);
-        context.lineTo(GAME_WIDTH, y);
-        context.stroke();
-      }
-
-      if (state.status === "playing") {
-        state.elapsed += dt;
-        state.score += dt * 10;
-
-        const speed = 340 + state.elapsed * 8;
-        if (state.keys.has("arrowleft") || state.keys.has("a")) state.playerX -= 330 * dt;
-        if (state.keys.has("arrowright") || state.keys.has("d")) state.playerX += 330 * dt;
-        state.playerX = clamp(state.playerX, 24, GAME_WIDTH - 24);
-
-        state.lastSpawn += dt;
-        const spawnEvery = Math.max(0.22, 0.78 - state.elapsed * 0.012);
-        if (state.lastSpawn > spawnEvery) {
-          state.lastSpawn = 0;
-          const size = 18 + Math.random() * 20;
-          state.obstacles.push({
-            x: size + Math.random() * (GAME_WIDTH - size * 2),
-            y: -size,
-            size,
-            speed: speed * (0.72 + Math.random() * 0.58),
-          });
-        }
-
-        for (const obstacle of state.obstacles) {
-          obstacle.y += obstacle.speed * dt;
-        }
-
-        state.obstacles = state.obstacles.filter((o) => o.y < GAME_HEIGHT + o.size);
-
-        for (const obstacle of state.obstacles) {
-          const hit =
-            Math.abs(obstacle.x - state.playerX) < obstacle.size + 15 &&
-            Math.abs(obstacle.y - (GAME_HEIGHT - 52)) < obstacle.size + 15;
-
-          if (hit) {
-            finishGame();
-            break;
-          }
-        }
-
-        setScore(Math.floor(state.score));
-      }
-
-      for (const obstacle of state.obstacles) {
-        context.save();
-        context.translate(obstacle.x, obstacle.y);
-        context.rotate((obstacle.y / 40) % (Math.PI * 2));
-        context.fillStyle = "#fb7185";
-        context.shadowBlur = 22;
-        context.shadowColor = "#fb7185";
-        context.fillRect(-obstacle.size / 2, -obstacle.size / 2, obstacle.size, obstacle.size);
-        context.restore();
-      }
-
-      const playerY = GAME_HEIGHT - 52;
-      context.save();
-      context.fillStyle = "#67e8f9";
-      context.shadowBlur = 26;
-      context.shadowColor = "#22d3ee";
-      context.beginPath();
-      context.roundRect(state.playerX - 16, playerY - 16, 32, 32, 8);
-      context.fill();
-      context.restore();
-
-      context.fillStyle = "rgba(255,255,255,.75)";
-      context.font = "600 16px system-ui";
-      context.fillText(`SCORE ${Math.floor(state.score)}`, 20, 28);
-
-      if (state.status !== "playing") {
-        context.fillStyle = "rgba(3,7,18,.72)";
-        context.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-        context.textAlign = "center";
-        context.fillStyle = "#ffffff";
-        context.font = "800 34px system-ui";
-        context.fillText(
-          state.status === "gameover" ? "RUN OVER" : "NEON DODGE",
-          GAME_WIDTH / 2,
-          GAME_HEIGHT / 2 - 18
-        );
-        context.fillStyle = "rgba(255,255,255,.70)";
-        context.font = "500 16px system-ui";
-        context.fillText(
-          state.status === "gameover" ? "Press SPACE or PLAY AGAIN" : "Dodge the falling blocks",
-          GAME_WIDTH / 2,
-          GAME_HEIGHT / 2 + 18
-        );
-        context.textAlign = "left";
-      }
-
-      frameRef.current = requestAnimationFrame(draw);
-    };
-
-    frameRef.current = requestAnimationFrame(draw);
-
-    return () => {
-      window.removeEventListener("resize", resize);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    };
-  }, [finishGame, startGame]);
-
-  const askAI = async (preset?: string) => {
-    const text = (preset ?? prompt).trim();
-    if (!text) return;
-    setAiBusy(true);
-    try {
-      const response = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text }),
-      });
-      const data = (await response.json()) as { answer?: string };
-      setAiReply(data.answer || "No answer came back.");
-    } catch {
-      setAiReply("The AI panel couldn't reach the game server.");
-    } finally {
-      setAiBusy(false);
-      setPrompt("");
+  const end=useCallback((success:boolean)=>{
+    const s=game.current; s.running=false; s.won=success;
+    if(success){
+      const final=Math.max(1,Math.floor(1000-s.t*70+s.echoes.length*85));
+      s.score=final; setScore(final);
+      const next=Math.max(s.best,final); s.best=next; setBest(next);
+      localStorage.setItem("afterimage-best",String(next));
     }
-  };
+    setRunning(false); setWon(success);
+  },[]);
 
-  return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">G</div>
-          <div>
-            <strong>GameForge</strong>
-            <span>AI Arcade</span>
-          </div>
-        </div>
+  useEffect(()=>{
+    const c=canvasRef.current; if(!c) return;
+    const ctx=c.getContext("2d"); if(!ctx) return;
+    const resize=()=>{const d=Math.min(devicePixelRatio||1,2); c.width=W*d;c.height=H*d;c.style.aspectRatio=W+"/"+H;ctx.setTransform(d,0,0,d,0,0)};
+    resize(); addEventListener("resize",resize);
+    const down=(e:KeyboardEvent)=>{const k=e.key.toLowerCase(); if(["arrowup","arrowdown","arrowleft","arrowright","w","a","s","d"," "].includes(k))e.preventDefault(); game.current.keys.add(k); if(k===" "&&!game.current.running)reset()};
+    const up=(e:KeyboardEvent)=>game.current.keys.delete(e.key.toLowerCase());
+    addEventListener("keydown",down);addEventListener("keyup",up);
+    let last=performance.now();
 
-        <nav className="nav">
-          <button className={tab === "play" ? "nav-item active" : "nav-item"} onClick={() => setTab("play")}>
-            <span>◈</span> Play
-          </button>
-          <button className={tab === "ai" ? "nav-item active" : "nav-item"} onClick={() => setTab("ai")}>
-            <span>✦</span> AI Lab
-          </button>
-          <button className={tab === "leaderboard" ? "nav-item active" : "nav-item"} onClick={() => setTab("leaderboard")}>
-            <span>♛</span> Leaderboard
-          </button>
-        </nav>
+    const frame=(now:number)=>{
+      const dt=Math.min(.035,(now-last)/1000);last=now;const s=game.current;
+      ctx.clearRect(0,0,W,H);
+      const bg=ctx.createRadialGradient(450,250,30,450,250,620);bg.addColorStop(0,"#172033");bg.addColorStop(1,"#060912");ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-        <div className="side-card">
-          <span className="eyebrow">CURRENT BUILD</span>
-          <strong>v0.1 — playable</strong>
-          <p>Browser-first. No download. Built with Next.js + Vercel.</p>
-        </div>
+      ctx.strokeStyle="rgba(160,180,220,.055)";ctx.lineWidth=1;
+      for(let x=20;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+      for(let y=20;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
 
-        <div className="sidebar-footer">
-          <span className="status-dot" /> Systems online
-        </div>
-      </aside>
+      if(s.running){
+        s.t+=dt;
+        const k=s.keys; let dx=0,dy=0;
+        if(k.has("arrowleft")||k.has("a"))dx--; if(k.has("arrowright")||k.has("d"))dx++;
+        if(k.has("arrowup")||k.has("w"))dy--; if(k.has("arrowdown")||k.has("s"))dy++;
+        const len=Math.hypot(dx,dy)||1; s.player.x=clamp(s.player.x+dx/len*SPEED*dt,32,W-32);s.player.y=clamp(s.player.y+dy/len*SPEED*dt,32,H-32);
+        s.recording.push({x:s.player.x,y:s.player.y});
+        if(s.t>=LOOP){
+          const trail=s.recording.slice(); if(trail.length>2)s.echoes.push({trail,born:s.t,color:["#8b5cf6","#22d3ee","#f472b6","#a3e635"][s.echoes.length%4]});
+          s.recording=[];s.t=0; s.player={x:s.start.x,y:s.start.y}; setEchoCount(s.echoes.length);
+        }
+        s.pulse+=dt;
+        if(!s.shard.got && dist(s.player,s.shard)<22)s.shard.got=true;
+        if(s.shard.got && dist(s.player,s.goal)<30)end(true);
+        for(const e of s.echoes){
+          const idx=Math.min(e.trail.length-1,Math.floor(s.t/LOOP*e.trail.length));
+          const p=e.trail[idx];
+          if(dist(s.player,p)<24)end(false);
+        }
+      }
 
-      <section className="content">
-        <header className="topbar">
-          <div>
-            <span className="eyebrow">YOUR ARCADE</span>
-            <h1>{tab === "play" ? "Pick a game." : tab === "ai" ? "Build with AI." : "Chase the high score."}</h1>
-          </div>
-          <div className="topbar-pill">
-            <span className="status-dot" /> AI connected
-          </div>
-        </header>
+      // exit ring
+      ctx.save();ctx.translate(s.goal.x,s.goal.y);ctx.rotate(s.pulse*.7);
+      ctx.strokeStyle=s.shard.got?"#a3e635":"rgba(255,255,255,.25)";ctx.lineWidth=3;ctx.shadowBlur=24;ctx.shadowColor=s.shard.got?"#a3e635":"transparent";
+      ctx.beginPath();ctx.arc(0,0,24+Math.sin(s.pulse*4)*3,0,Math.PI*2);ctx.stroke();ctx.rotate(-s.pulse*1.4);ctx.strokeStyle="rgba(255,255,255,.18)";ctx.beginPath();ctx.arc(0,0,12,0,Math.PI*2);ctx.stroke();ctx.restore();
 
-        {tab === "play" && (
-          <>
-            <section className="hero">
-              <div>
-                <span className="eyebrow">FEATURED GAME</span>
-                <h2>NEON DODGE</h2>
-                <p>Stay alive. Read the pattern. Push your score.</p>
-                <div className="hero-actions">
-                  <button className="primary" onClick={startGame}>
-                    {status === "playing" ? "Restart Run" : "Play Now"} <span>→</span>
-                  </button>
-                  <button className="ghost" onClick={() => setTab("ai")}>Ask AI Coach</button>
-                </div>
-              </div>
-              <div className="hero-metric">
-                <span>BEST</span>
-                <strong>{best.toString().padStart(4, "0")}</strong>
-              </div>
-            </section>
+      // memory shard
+      if(!s.shard.got){ctx.save();ctx.translate(s.shard.x,s.shard.y);ctx.rotate(s.pulse*1.5);ctx.fillStyle="#a3e635";ctx.shadowBlur=28;ctx.shadowColor="#a3e635";ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(12,0);ctx.lineTo(0,15);ctx.lineTo(-12,0);ctx.closePath();ctx.fill();ctx.restore()}
 
-            <section className="game-panel">
-              <div className="panel-head">
-                <div>
-                  <span className="eyebrow">LIVE ARCADE</span>
-                  <h3>Neon Dodge</h3>
-                </div>
-                <div className="control-hint">A / D or ← / → <span>•</span> Space to restart</div>
-              </div>
-              <div className="canvas-wrap">
-                <canvas ref={canvasRef} className="game-canvas" width={GAME_WIDTH} height={GAME_HEIGHT} />
-              </div>
-            </section>
+      // echoes
+      for(const e of s.echoes){
+        const idx=Math.min(e.trail.length-1,Math.floor(s.t/LOOP*e.trail.length));const p=e.trail[idx]; if(!p)continue;
+        ctx.save();ctx.globalAlpha=.9;ctx.fillStyle=e.color;ctx.shadowBlur=20;ctx.shadowColor=e.color;ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fill();
+        ctx.globalAlpha=.15;ctx.beginPath();ctx.arc(p.x,p.y,26,0,Math.PI*2);ctx.fill();ctx.restore();
+      }
 
-            <section className="games-grid">
-              <article className="game-card featured-card">
-                <div className="game-art neon">✦</div>
-                <div className="card-copy">
-                  <span className="tag">PLAYABLE</span>
-                  <h4>Neon Dodge</h4>
-                  <p>Arcade survival with escalating speed.</p>
-                  <button className="mini-button" onClick={startGame}>Launch</button>
-                </div>
-              </article>
-              <article className="game-card">
-                <div className="game-art grid">▦</div>
-                <div className="card-copy">
-                  <span className="tag muted">NEXT BUILD</span>
-                  <h4>Grid Blitz</h4>
-                  <p>AI-generated rounds, coming next.</p>
-                  <button className="mini-button disabled" disabled>Locked</button>
-                </div>
-              </article>
-              <article className="game-card">
-                <div className="game-art memory">◌</div>
-                <div className="card-copy">
-                  <span className="tag muted">NEXT BUILD</span>
-                  <h4>Memory Rush</h4>
-                  <p>Pattern memory with adaptive difficulty.</p>
-                  <button className="mini-button disabled" disabled>Locked</button>
-                </div>
-              </article>
-            </section>
-          </>
-        )}
+      // player
+      ctx.save();ctx.fillStyle="#fff";ctx.shadowBlur=26;ctx.shadowColor="#fff";ctx.beginPath();ctx.arc(s.player.x,s.player.y,8,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle="rgba(255,255,255,.25)";ctx.beginPath();ctx.arc(s.player.x,s.player.y,16+Math.sin(s.pulse*5)*2,0,Math.PI*2);ctx.stroke();ctx.restore();
 
-        {tab === "ai" && (
-          <section className="ai-layout">
-            <div className="ai-card large">
-              <div className="ai-orb">✦</div>
-              <span className="eyebrow">GAMEFORGE AI</span>
-              <h2>Your game copilot.</h2>
-              <p>Ask for strategy, game ideas, UI concepts, or beginner-friendly coding help.</p>
+      ctx.fillStyle="rgba(255,255,255,.8)";ctx.font="700 13px system-ui";ctx.fillText("LOOP "+(LOOP-s.t).toFixed(1),20,28);ctx.fillStyle="rgba(255,255,255,.42)";ctx.font="500 12px system-ui";ctx.fillText("YOUR PAST IS ALIVE",20,48);
+      ctx.textAlign="right";ctx.fillText("ECHOES  "+s.echoes.length,W-20,28);ctx.textAlign="left";
 
-              <div className="prompt-row">
-                <input
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") askAI();
-                  }}
-                  placeholder="e.g. Give me a new game idea..."
-                />
-                <button className="primary" onClick={() => askAI()} disabled={aiBusy}>
-                  {aiBusy ? "Thinking..." : "Ask"} →
-                </button>
-              </div>
+      if(!s.running){
+        ctx.fillStyle="rgba(2,5,12,.76)";ctx.fillRect(0,0,W,H);ctx.textAlign="center";ctx.fillStyle="#fff";ctx.font="900 42px system-ui";
+        ctx.fillText(won?"THE LOOP ACCEPTED YOU":"AFTERIMAGE",W/2,H/2-20);ctx.font="500 16px system-ui";ctx.fillStyle="rgba(255,255,255,.65)";
+        ctx.fillText(won?"You solved a room with your own past selves.":"Move for 3.6 seconds. Then your path comes back.",W/2,H/2+18);ctx.fillText("WASD / ARROWS  •  SPACE TO BEGIN",W/2,H/2+48);ctx.textAlign="left";
+      }
+      raf.current=requestAnimationFrame(frame);
+    };
+    raf.current=requestAnimationFrame(frame);
+    return()=>{removeEventListener("resize",resize);removeEventListener("keydown",down);removeEventListener("keyup",up);if(raf.current)cancelAnimationFrame(raf.current)};
+  },[end,reset,won]);
 
-              <div className="quick-prompts">
-                <button onClick={() => askAI("Give me a tip for Neon Dodge.")}>Get a game tip</button>
-                <button onClick={() => askAI("Give me a simple browser game idea I could build.")}>Invent a game</button>
-                <button onClick={() => askAI("How should I make the next GameForge UI feel more polished?")}>Improve the UI</button>
-              </div>
-            </div>
+  return <main className="world">
+    <header className="mast">
+      <div className="title"><span className="sigil">◌</span><div><b>AFTERIMAGE</b><small>an experiment in playing with your own past</small></div></div>
+      <div className="best">BEST <strong>{best||"—"}</strong></div>
+    </header>
 
-            <div className="ai-response">
-              <span className="eyebrow">RESPONSE</span>
-              <div className="response-avatar">G</div>
-              <p>{aiReply}</p>
-              <span className="response-note">AI responses are generated server-side.</span>
-            </div>
-          </section>
-        )}
+    <section className="intro">
+      <div>
+        <span className="kicker">A DIFFERENT KIND OF GAME</span>
+        <h1>You don't fight the past.<br/><em>You choreograph it.</em></h1>
+        <p>Every 3.6 seconds, your last movement becomes a living Echo. Your future is now a room full of everything you just did.</p>
+        <div className="buttons"><button className="play" onClick={reset}>{running?"RESET THE ROOM":won?"PLAY AGAIN":"ENTER THE ROOM"} <span>↗</span></button><span className="hint">WASD / ARROWS · SPACE</span></div>
+      </div>
+      <div className="rules">
+        <div><span>01</span><b>MOVE</b><p>Collect the green memory.</p></div>
+        <div><span>02</span><b>LOOP</b><p>Your path becomes an Echo.</p></div>
+        <div><span>03</span><b>COOPERATE</b><p>Use your past selves to reach the ring.</p></div>
+      </div>
+    </section>
 
-        {tab === "leaderboard" && (
-          <section className="leaderboard-card">
-            <div className="leaderboard-head">
-              <div>
-                <span className="eyebrow">LOCAL LEADERBOARD</span>
-                <h2>Your runs</h2>
-              </div>
-              <span className="score-chip">BEST {best}</span>
-            </div>
+    <section className="stage">
+      <div className="stagebar"><span>ROOM 01 / RECURSION</span><span>{echoCount} ECHO{echoCount===1?"":"ES"}</span></div>
+      <div className="canvas-frame"><canvas ref={canvasRef} width={W} height={H}/></div>
+    </section>
 
-            <div className="leader-row top">
-              <span>01</span><strong>YOU</strong><b>{best.toString().padStart(4, "0")}</b>
-            </div>
-            <div className="leader-row"><span>02</span><strong>AI_BETA</strong><b>0084</b></div>
-            <div className="leader-row"><span>03</span><strong>PIXEL_RUNNER</strong><b>0071</b></div>
-            <div className="leader-row"><span>04</span><strong>GRID_GHOST</strong><b>0066</b></div>
-
-            <p className="leader-note">Your best score is saved in this browser. Online accounts can be added in the next build.</p>
-          </section>
-        )}
-      </section>
-    </main>
-  );
+    <footer><span>Nothing is random after you move.</span><span>Every mistake becomes part of the level.</span><span>Built as an original browser experiment.</span></footer>
+  </main>;
 }
