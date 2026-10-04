@@ -1,151 +1,141 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-const W = 900;
-const H = 520;
-const LOOP = 3.6;
-const SPEED = 190;
-type Point = { x: number; y: number };
-type Echo = { trail: Point[]; born: number; color: string };
+const W=1100,H=680;
+type Car={x:number;y:number;a:number;speed:number;color:string;player?:boolean};
+type Mission={x:number;y:number;title:string;reward:number;done:boolean};
+type Player={x:number;y:number;money:number;health:number;wanted:number;inCar:boolean};
 
-const clamp = (v:number,a:number,b:number) => Math.max(a,Math.min(b,v));
-
-function dist(a:Point,b:Point){ return Math.hypot(a.x-b.x,a.y-b.y); }
-
-export default function Home() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const raf = useRef<number | null>(null);
-  const game = useRef({
-    running:false, won:false, t:0, player:{x:130,y:260},
-    start:{x:130,y:260}, goal:{x:770,y:260}, shard:{x:450,y:120,got:false},
-    keys:new Set<string>(), recording:[] as Point[], echoes:[] as Echo[],
-    lastX:130,lastY:260, pulse:0, score:0, best:0
-  });
+export default function Home(){
+  const ref=useRef<HTMLCanvasElement>(null);
+  const [money,setMoney]=useState(250);
+  const [wanted,setWanted]=useState(0);
+  const [mission,setMission]=useState("Find the blue marker");
   const [running,setRunning]=useState(false);
-  const [won,setWon]=useState(false);
-  const [score,setScore]=useState(0);
-  const [best,setBest]=useState(0);
-  const [echoCount,setEchoCount]=useState(0);
-
-  useEffect(()=>{ const b=Number(localStorage.getItem("afterimage-best")||0); setBest(b); game.current.best=b; },[]);
-
-  const reset=useCallback(()=>{
-    const s=game.current;
-    s.running=true; s.won=false; s.t=0; s.player={x:130,y:260}; s.start={x:130,y:260};
-    s.recording=[]; s.echoes=[]; s.pulse=0; s.score=0; s.shard={x:450,y:120,got:false};
-    setRunning(true); setWon(false); setScore(0); setEchoCount(0);
-  },[]);
-
-  const end=useCallback((success:boolean)=>{
-    const s=game.current; s.running=false; s.won=success;
-    if(success){
-      const final=Math.max(1,Math.floor(1000-s.t*70+s.echoes.length*85));
-      s.score=final; setScore(final);
-      const next=Math.max(s.best,final); s.best=next; setBest(next);
-      localStorage.setItem("afterimage-best",String(next));
-    }
-    setRunning(false); setWon(success);
-  },[]);
 
   useEffect(()=>{
-    const c=canvasRef.current; if(!c) return;
-    const ctx=c.getContext("2d"); if(!ctx) return;
-    const resize=()=>{const d=Math.min(devicePixelRatio||1,2); c.width=W*d;c.height=H*d;c.style.aspectRatio=W+"/"+H;ctx.setTransform(d,0,0,d,0,0)};
-    resize(); addEventListener("resize",resize);
-    const down=(e:KeyboardEvent)=>{const k=e.key.toLowerCase(); if(["arrowup","arrowdown","arrowleft","arrowright","w","a","s","d"," "].includes(k))e.preventDefault(); game.current.keys.add(k); if(k===" "&&!game.current.running)reset()};
-    const up=(e:KeyboardEvent)=>game.current.keys.delete(e.key.toLowerCase());
+    const c=ref.current;if(!c)return; const ctx=c.getContext("2d");if(!ctx)return;
+    const keys=new Set<string>();
+    const p:Player={x:500,y:330,money:250,health:100,wanted:0,inCar:false};
+    const cars:Car[]=[
+      {x:430,y:260,a:0,speed:0,color:"#e85d5d"},
+      {x:650,y:420,a:Math.PI/2,speed:0,color:"#42a5f5"},
+      {x:300,y:520,a:0,speed:0,color:"#f2c94c"},
+      {x:760,y:220,a:Math.PI/2,speed:0,color:"#b86cff"},
+      {x:510,y:330,a:0,speed:0,color:"#ffffff",player:true}
+    ];
+    const missions:Mission[]=[
+      {x:180,y:145,title:"Meet the contact",reward:300,done:false},
+      {x:850,y:155,title:"Deliver the package",reward:500,done:false},
+      {x:900,y:535,title:"Street race",reward:750,done:false}
+    ];
+    let active=0,last=performance.now(),raf=0,cam={x:0,y:0},flash=0;
+
+    const down=(e:KeyboardEvent)=>{keys.add(e.key.toLowerCase());if([" ","arrowup","arrowdown","arrowleft","arrowright"].includes(e.key.toLowerCase()))e.preventDefault()};
+    const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase());
     addEventListener("keydown",down);addEventListener("keyup",up);
-    let last=performance.now();
+
+    const road=(x:number,y:number,w:number,h:number)=>{
+      ctx.fillStyle="#222733";ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle="rgba(255,255,255,.12)";ctx.lineWidth=2;
+      if(w>h){for(let xx=x+20;xx<x+w;xx+=42){ctx.setLineDash([18,16]);ctx.beginPath();ctx.moveTo(xx,y+h/2);ctx.lineTo(xx+18,y+h/2);ctx.stroke()}ctx.setLineDash([])}
+      else{for(let yy=y+20;yy<y+h;yy+=42){ctx.setLineDash([18,16]);ctx.beginPath();ctx.moveTo(x+w/2,yy);ctx.lineTo(x+w/2,yy+18);ctx.stroke()}ctx.setLineDash([])}
+    };
 
     const frame=(now:number)=>{
-      const dt=Math.min(.035,(now-last)/1000);last=now;const s=game.current;
+      const dt=Math.min(.033,(now-last)/1000);last=now;
+      if(running){
+        const dx=(keys.has("d")||keys.has("arrowright")?1:0)-(keys.has("a")||keys.has("arrowleft")?1:0);
+        const dy=(keys.has("s")||keys.has("arrowdown")?1:0)-(keys.has("w")||keys.has("arrowup")?1:0);
+        if(p.inCar){
+          const car=cars.find(x=>x.player)!;
+          if(dx||dy){car.a=Math.atan2(dy,dx);car.speed=Math.min(280,car.speed+420*dt)}
+          else car.speed*=.91;
+          car.x+=Math.cos(car.a)*car.speed*dt;car.y+=Math.sin(car.a)*car.speed*dt;
+          p.x=car.x;p.y=car.y;
+          if(keys.has("e")){p.inCar=false;car.speed=0;p.x+=30;p.y+=20}
+        }else{
+          const len=Math.hypot(dx,dy)||1;p.x+=dx/len*170*dt;p.y+=dy/len*170*dt;
+          if(keys.has("e")){
+            const car=cars.find(x=>!x.player&&Math.hypot(x.x-p.x,x.y-p.y)<42);
+            if(car){car.player=true;p.inCar=true;cars.forEach(x=>{if(x!==car)x.player=false})}
+          }
+        }
+        p.x=Math.max(45,Math.min(1955,p.x));p.y=Math.max(45,Math.min(1355,p.y));
+        const m=missions[active];
+        if(!m.done&&Math.hypot(p.x-m.x,p.y-m.y)<55){
+          m.done=true;p.money+=m.reward;active=Math.min(missions.length-1,active+1);flash=1;
+          setMoney(p.money);setMission(active===missions.length-1&&missions[active].done?"City free-roam":missions[active].title);
+        }
+        if(p.wanted>0)p.wanted=Math.max(0,p.wanted-dt*.035);
+        setWanted(Math.round(p.wanted));
+      }
+
+      cam.x=Math.max(0,Math.min(2000-W,p.x-W/2));cam.y=Math.max(0,Math.min(1400-H,p.y-H/2));
       ctx.clearRect(0,0,W,H);
-      const bg=ctx.createRadialGradient(450,250,30,450,250,620);bg.addColorStop(0,"#172033");bg.addColorStop(1,"#060912");ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+      ctx.fillStyle="#10151a";ctx.fillRect(0,0,W,H);
+      ctx.save();ctx.translate(-cam.x,-cam.y);
 
-      ctx.strokeStyle="rgba(160,180,220,.055)";ctx.lineWidth=1;
-      for(let x=20;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
-      for(let y=20;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+      for(let x=0;x<2000;x+=120)for(let y=0;y<1400;y+=120){
+        ctx.fillStyle=((x+y)/120)%2?"#171d20":"#1a2023";ctx.fillRect(x+6,y+6,108,108);
+      }
+      road(0,90,2000,105);road(0,620,2000,105);road(300,0,105,1400);road(980,0,105,1400);road(1640,0,105,1400);
+      ctx.fillStyle="#24302a";ctx.fillRect(1130,180,400,300);
+      ctx.fillStyle="#1d2930";ctx.fillRect(80,820,650,360);
 
-      if(s.running){
-        s.t+=dt;
-        const k=s.keys; let dx=0,dy=0;
-        if(k.has("arrowleft")||k.has("a"))dx--; if(k.has("arrowright")||k.has("d"))dx++;
-        if(k.has("arrowup")||k.has("w"))dy--; if(k.has("arrowdown")||k.has("s"))dy++;
-        const len=Math.hypot(dx,dy)||1; s.player.x=clamp(s.player.x+dx/len*SPEED*dt,32,W-32);s.player.y=clamp(s.player.y+dy/len*SPEED*dt,32,H-32);
-        s.recording.push({x:s.player.x,y:s.player.y});
-        if(s.t>=LOOP){
-          const trail=s.recording.slice(); if(trail.length>2)s.echoes.push({trail,born:s.t,color:["#8b5cf6","#22d3ee","#f472b6","#a3e635"][s.echoes.length%4]});
-          s.recording=[];s.t=0; s.player={x:s.start.x,y:s.start.y}; setEchoCount(s.echoes.length);
-        }
-        s.pulse+=dt;
-        if(!s.shard.got && dist(s.player,s.shard)<22)s.shard.got=true;
-        if(s.shard.got && dist(s.player,s.goal)<30)end(true);
-        for(const e of s.echoes){
-          const idx=Math.min(e.trail.length-1,Math.floor(s.t/LOOP*e.trail.length));
-          const p=e.trail[idx];
-          if(s.t>0.28 && dist(s.player,p)<24)end(false);
-        }
+      ctx.fillStyle="#d4b37a";ctx.font="800 20px system-ui";
+      ctx.fillText("NORTHSIDE",120,70);ctx.fillText("DOWNTOWN",1130,145);ctx.fillText("RIVERSIDE",90,800);
+      ctx.fillStyle="#55616a";ctx.font="700 11px system-ui";ctx.fillText("FREE CITY — ORIGINAL BROWSER WORLD",120,90);
+
+      missions.forEach((m,i)=>{
+        if(m.done)return;
+        ctx.beginPath();ctx.arc(m.x,m.y,20+Math.sin(now/180)*4,0,Math.PI*2);
+        ctx.fillStyle=i===active?"#65e6ff":"rgba(101,230,255,.18)";ctx.fill();
+        ctx.strokeStyle="#65e6ff";ctx.lineWidth=3;ctx.stroke();
+        ctx.fillStyle="#fff";ctx.font="700 12px system-ui";ctx.fillText(m.title,m.x-45,m.y-32);
+      });
+
+      cars.forEach(car=>{
+        ctx.save();ctx.translate(car.x,car.y);ctx.rotate(car.a);
+        ctx.fillStyle="rgba(0,0,0,.35)";ctx.fillRect(-24,9,48,9);
+        ctx.fillStyle=car.color;ctx.fillRect(-24,-13,48,26);
+        ctx.fillStyle="#111820";ctx.fillRect(-10,-10,20,20);
+        ctx.fillStyle="#dbe8ef";ctx.fillRect(10,-10,9,20);
+        ctx.restore();
+      });
+
+      if(!p.inCar){
+        ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle="#65e6ff";ctx.lineWidth=3;ctx.beginPath();ctx.arc(p.x,p.y,17,0,Math.PI*2);ctx.stroke();
       }
 
-      // exit ring
-      ctx.save();ctx.translate(s.goal.x,s.goal.y);ctx.rotate(s.pulse*.7);
-      ctx.strokeStyle=s.shard.got?"#a3e635":"rgba(255,255,255,.25)";ctx.lineWidth=3;ctx.shadowBlur=24;ctx.shadowColor=s.shard.got?"#a3e635":"transparent";
-      ctx.beginPath();ctx.arc(0,0,24+Math.sin(s.pulse*4)*3,0,Math.PI*2);ctx.stroke();ctx.rotate(-s.pulse*1.4);ctx.strokeStyle="rgba(255,255,255,.18)";ctx.beginPath();ctx.arc(0,0,12,0,Math.PI*2);ctx.stroke();ctx.restore();
+      if(flash>0){flash-=dt;ctx.fillStyle="rgba(101,230,255,.08)";ctx.fillRect(0,0,2000,1400)}
+      ctx.restore();
 
-      // memory shard
-      if(!s.shard.got){ctx.save();ctx.translate(s.shard.x,s.shard.y);ctx.rotate(s.pulse*1.5);ctx.fillStyle="#a3e635";ctx.shadowBlur=28;ctx.shadowColor="#a3e635";ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(12,0);ctx.lineTo(0,15);ctx.lineTo(-12,0);ctx.closePath();ctx.fill();ctx.restore()}
+      ctx.fillStyle="rgba(5,8,12,.88)";ctx.fillRect(18,18,350,92);
+      ctx.fillStyle="#fff";ctx.font="900 18px system-ui";ctx.fillText("CITYLINE",35,47);
+      ctx.fillStyle="#8f9aa5";ctx.font="600 11px system-ui";ctx.fillText("OPEN-WORLD BROWSER GAME",35,67);
+      ctx.fillStyle="#65e6ff";ctx.font="800 14px system-ui";ctx.fillText("$ "+p.money.toLocaleString(),35,91);
+      ctx.fillStyle="#ff5364";ctx.fillText("WANTED  "+"★".repeat(Math.round(p.wanted)),145,91);
+      ctx.fillStyle="#fff";ctx.font="700 12px system-ui";ctx.fillText("MISSION  "+(missions[active]?.title||"Free roam"),500,42);
+      ctx.fillStyle="#8f9aa5";ctx.font="500 11px system-ui";ctx.fillText("WASD / ARROWS move or drive   •   E enter/exit",500,62);
 
-      // echoes
-      for(const e of s.echoes){
-        const idx=Math.min(e.trail.length-1,Math.floor(s.t/LOOP*e.trail.length));const p=e.trail[idx]; if(!p)continue;
-        ctx.save();ctx.globalAlpha=.9;ctx.fillStyle=e.color;ctx.shadowBlur=20;ctx.shadowColor=e.color;ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fill();
-        ctx.globalAlpha=.15;ctx.beginPath();ctx.arc(p.x,p.y,26,0,Math.PI*2);ctx.fill();ctx.restore();
-      }
-
-      // player
-      ctx.save();ctx.fillStyle="#fff";ctx.shadowBlur=26;ctx.shadowColor="#fff";ctx.beginPath();ctx.arc(s.player.x,s.player.y,8,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle="rgba(255,255,255,.25)";ctx.beginPath();ctx.arc(s.player.x,s.player.y,16+Math.sin(s.pulse*5)*2,0,Math.PI*2);ctx.stroke();ctx.restore();
-
-      ctx.fillStyle="rgba(255,255,255,.8)";ctx.font="700 13px system-ui";ctx.fillText("LOOP "+(LOOP-s.t).toFixed(1),20,28);ctx.fillStyle="rgba(255,255,255,.42)";ctx.font="500 12px system-ui";ctx.fillText("YOUR PAST IS ALIVE",20,48);
-      ctx.textAlign="right";ctx.fillText("ECHOES  "+s.echoes.length,W-20,28);ctx.textAlign="left";
-
-      if(!s.running){
-        ctx.fillStyle="rgba(2,5,12,.76)";ctx.fillRect(0,0,W,H);ctx.textAlign="center";ctx.fillStyle="#fff";ctx.font="900 42px system-ui";
-        ctx.fillText(won?"THE LOOP ACCEPTED YOU":"AFTERIMAGE",W/2,H/2-20);ctx.font="500 16px system-ui";ctx.fillStyle="rgba(255,255,255,.65)";
-        ctx.fillText(won?"You solved a room with your own past selves.":"Move for 3.6 seconds. Then your path comes back.",W/2,H/2+18);ctx.fillText("WASD / ARROWS  •  SPACE TO BEGIN",W/2,H/2+48);ctx.textAlign="left";
-      }
-      raf.current=requestAnimationFrame(frame);
+      raf=requestAnimationFrame(frame);
     };
-    raf.current=requestAnimationFrame(frame);
-    return()=>{removeEventListener("resize",resize);removeEventListener("keydown",down);removeEventListener("keyup",up);if(raf.current)cancelAnimationFrame(raf.current)};
-  },[end,reset,won]);
+    raf=requestAnimationFrame(frame);
+    return()=>{cancelAnimationFrame(raf);removeEventListener("keydown",down);removeEventListener("keyup",up)};
+  },[running]);
 
-  return <main className="world">
-    <header className="mast">
-      <div className="title"><span className="sigil">◌</span><div><b>AFTERIMAGE</b><small>an experiment in playing with your own past</small></div></div>
-      <div className="best">BEST <strong>{best||"—"}</strong></div>
-    </header>
-
-    <section className="intro">
-      <div>
-        <span className="kicker">A DIFFERENT KIND OF GAME</span>
-        <h1>You don't fight the past.<br/><em>You choreograph it.</em></h1>
-        <p>Every 3.6 seconds, your last movement becomes a living Echo. Your future is now a room full of everything you just did.</p>
-        <div className="buttons"><button className="play" onClick={reset}>{running?"RESET THE ROOM":won?"PLAY AGAIN":"ENTER THE ROOM"} <span>↗</span></button><span className="hint">WASD / ARROWS · SPACE</span></div>
-      </div>
-      <div className="rules">
-        <div><span>01</span><b>MOVE</b><p>Collect the green memory.</p></div>
-        <div><span>02</span><b>LOOP</b><p>Your path becomes an Echo.</p></div>
-        <div><span>03</span><b>COOPERATE</b><p>Use your past selves to reach the ring.</p></div>
-      </div>
+  return <main className="city">
+    <header className="top"><div><strong>CITYLINE</strong><span>FREE OPEN WORLD</span></div><div className="pitch">A browser city built for everyone.</div></header>
+    <section className="hero">
+      <div><small>THE CITY IS YOURS</small><h1>A BIG CITY.<br/><i>A FREE WORLD.</i></h1>
+      <p>Explore an original open-world city right in your browser. Walk, drive, discover missions, earn cash and build your story.</p>
+      <button onClick={()=>setRunning(true)}>{running?"GAME RUNNING":"ENTER CITY"} <b>→</b></button></div>
+      <div className="promise"><b>NOT GTA.</b><p>We aren't copying another game's characters, map, story or assets. We're building our own world around the things that make open-world games exciting.</p></div>
     </section>
-
-    <section className="stage">
-      <div className="stagebar"><span>ROOM 01 / RECURSION</span><span>{echoCount} ECHO{echoCount===1?"":"ES"}</span></div>
-      <div className="canvas-frame"><canvas ref={canvasRef} width={W} height={H}/></div>
-    </section>
-
-    <footer><span>Nothing is random after you move.</span><span>Every mistake becomes part of the level.</span><span>Built as an original browser experiment.</span></footer>
+    <section className="game"><canvas ref={ref} width={W} height={H}/></section>
+    <footer><span>WASD / ARROWS — MOVE & DRIVE</span><span>E — ENTER / EXIT VEHICLE</span><span>BUILT FOR THE BROWSER</span></footer>
   </main>;
 }
