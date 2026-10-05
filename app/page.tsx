@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 type Point = { x: number; y: number };
 type Actor = { id: string; x: number; y: number; scale: number; delay: number };
@@ -147,7 +147,7 @@ export default function Home() {
 
           <div className="traffic">
             {traffic.map((car) => (
-              <div key={car.id} className="npc-car" style={{ left: car.x + "%", top: car.y + "%", "--car-scale": car.scale, "--car-delay": car.delay + "s" } as React.CSSProperties}>
+              <div key={car.id} className="npc-car" style={{ left: car.x + "%", top: car.y + "%", "--car-scale": car.scale, "--car-delay": car.delay + "s" } as CSSProperties}>
                 <span className="car-roof" /><span className="car-window" />
                 <i className="car-wheel left" /><i className="car-wheel right" />
                 <b className="headlight left" /><b className="headlight right" />
@@ -157,7 +157,7 @@ export default function Home() {
 
           <div className="pedestrians">
             {pedestrians.map((ped) => (
-              <div key={ped.id} className="npc-person" style={{ left: ped.x + "%", top: ped.y + "%", "--ped-scale": ped.scale, "--ped-delay": ped.delay + "s" } as React.CSSProperties}>
+              <div key={ped.id} className="npc-person" style={{ left: ped.x + "%", top: ped.y + "%", "--ped-scale": ped.scale, "--ped-delay": ped.delay + "s" } as CSSProperties}>
                 <span className="npc-head" /><span className="npc-torso" />
                 <i className="npc-leg left" /><i className="npc-leg right" />
               </div>
