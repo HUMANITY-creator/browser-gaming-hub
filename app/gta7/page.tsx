@@ -64,6 +64,11 @@ export default function ExtraCity(){
   const [time,setTime]=useState(18.5);
   const [rain,setRain]=useState(false);
   const [inCar,setInCar]=useState(false);
+  const inCarRef=useRef(false), jobRef=useRef<Job|null>(null), rainRef=useRef(false), wantedRef=useRef(0);
+  useEffect(()=>{inCarRef.current=inCar;},[inCar]);
+  useEffect(()=>{jobRef.current=job;},[job]);
+  useEffect(()=>{rainRef.current=rain;},[rain]);
+  useEffect(()=>{wantedRef.current=wanted;},[wanted]);
 
   useEffect(()=>{
     const root=mount.current;
@@ -156,10 +161,14 @@ export default function ExtraCity(){
     const animate=()=>{
       raf=requestAnimationFrame(animate);
       const dt=Math.min(clock.getDelta(),.035); elapsed+=dt;
-      const speed=inCar?13:6.5;
+      const driving=inCarRef.current;
+      const currentJob=jobRef.current;
+      const raining=rainRef.current;
+      const currentWanted=wantedRef.current;
+      const speed=driving?13:6.5;
       const upKey=keys.has("w")||keys.has("arrowup"), downKey=keys.has("s")||keys.has("arrowdown");
       const left=keys.has("a")||keys.has("arrowleft"), right=keys.has("d")||keys.has("arrowright");
-      const active=inCar&&playerCar?playerCar:player;
+      const active=driving&&playerCar?playerCar:player;
       const forward=new THREE.Vector3(0,0,-1).applyQuaternion(active.quaternion);
       if(upKey) active.position.addScaledVector(forward,speed*dt);
       if(downKey) active.position.addScaledVector(forward,-speed*.62*dt);
@@ -183,14 +192,14 @@ export default function ExtraCity(){
         }
       }
 
-      if(wanted>0){
-        const needed=wanted>=4?4:wanted>=2?2:1;
+      if(currentWanted>0){
+        const needed=currentWanted>=4?4:currentWanted>=2?2:1;
         while(cops.length<needed){const c=makeCar("#f1f1f1",true);c.position.set(active.position.x+18+cops.length*8,.05,active.position.z+18);scene.add(c);cops.push(c);}
         while(cops.length>needed){const c=cops.pop();if(c)scene.remove(c);}
         for(const c of cops){
           const dx=active.position.x-c.position.x,dz=active.position.z-c.position.z,len=Math.hypot(dx,dz)||1;
-          c.position.x+=(dx/len)*(7+currentWanted*1.8)*dt;c.position.z+=(dz/len)*(7+wanted*1.8)*dt;c.rotation.y=Math.atan2(dx,dz);
-          if(c.position.distanceTo(active.position)<2.5){setWanted(Math.min(5,wanted+1));}
+          c.position.x+=(dx/len)*(7+currentWanted*1.8)*dt;c.position.z+=(dz/len)*(7+currentWanted*1.8)*dt;c.rotation.y=Math.atan2(dx,dz);
+          if(c.position.distanceTo(active.position)<2.5){setWanted(Math.min(5,currentWanted+1));}
         }
       } else while(cops.length){const c=cops.pop();if(c)scene.remove(c);}
 
@@ -198,13 +207,14 @@ export default function ExtraCity(){
       camera.position.lerp(desired,1-Math.pow(.0001,dt));
       camera.lookAt(active.position.x,active.position.y+1.1,active.position.z-3);
 
-      const night=time>=19||time<6;
+      const gameHour=(18.5+elapsed*.22)%24;
+      const night=gameHour>=19||gameHour<6;
       const sky=night?"#08101a":"#9eb9cc";
       scene.background.lerp(new THREE.Color(sky),.025); scene.fog?.color.lerp(new THREE.Color(sky),.025);
       hemi.intensity=night?0.55:1.8; sun.intensity=night?.45:3.2;
       setTime(v=>(v+dt*.22)%24);
 
-      if(rain){
+      if(raining){
         const rainCount=110;
         const group=scene.getObjectByName("rain") as THREE.Group|null;
         const rg=group||new THREE.Group();
@@ -213,12 +223,12 @@ export default function ExtraCity(){
         rg.children.forEach(m=>{m.position.y-=28*dt;if(m.position.y<1)m.position.y=35;});
       } else {const rg=scene.getObjectByName("rain");if(rg)scene.remove(rg);}
 
-      if(job){
-        const target=jobs[job].target;
+      if(currentJob){
+        const target=jobs[currentJob].target;
         missionMarker.visible=true;missionMarker.position.copy(target);missionMarker.position.y=.12;
         if(active.position.distanceTo(target)<3){
-          if(job==="checkpoint"){setMessage("Checkpoint reached — head back to the start.");}
-          else {setCash(v=>v+jobs[job].reward);setMessage(job==="delivery"?"NIGHT DELIVERY complete. +$1,500":"CLEAN GETAWAY complete. +$2,800");setJob(null);missionMarker.visible=false;setWanted(0);}
+          if(currentJob==="checkpoint"){setMessage("Checkpoint reached — head back to the start.");}
+          else {setCash(v=>v+jobs[currentJob].reward);setMessage(currentJob==="delivery"?"NIGHT DELIVERY complete. +$1,500":"CLEAN GETAWAY complete. +$2,800");setJob(null);missionMarker.visible=false;setWanted(0);}
         }
       }
 
@@ -229,7 +239,7 @@ export default function ExtraCity(){
     const resize=()=>{if(!root)return;camera.aspect=root.clientWidth/root.clientHeight;camera.updateProjectionMatrix();renderer.setSize(root.clientWidth,root.clientHeight);};
     window.addEventListener("resize",resize);
     return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("resize",resize);renderer.dispose();root.removeChild(renderer.domElement);};
-  },[inCar,job,rain,time,wanted]);
+  },[]);
 
   return <main style={{height:"100vh",background:"#070b0f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
     <header style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px",background:"#080c10",borderBottom:"1px solid #27323a",position:"relative",zIndex:10}}>
