@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const CITY_BG="https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&w=2200&q=88";
+const CITY_BG="https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&w=2400&q=92";
 
 type Zone={id:string;label:string;x:number;y:number;reward:number};
 const zones:Zone[]=[
@@ -22,14 +22,7 @@ export default function Home(){
   const [inCar,setInCar]=useState(false);
   const [position,setPosition]=useState({x:50,y:58});
   const [toast,setToast]=useState("Welcome to CITYLINE");
-  const [time,setTime]=useState("7:42 PM");
-
-  useEffect(()=>{
-    const t=setInterval(()=>{
-      setTime(new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}));
-    },30000);
-    return()=>clearInterval(t);
-  },[]);
+  const [time]=useState("7:42 PM");
 
   useEffect(()=>{
     const onKey=(e:KeyboardEvent)=>{
@@ -81,6 +74,15 @@ export default function Home(){
   return (
     <main className="game-shell">
       <section className="world" style={{backgroundImage:`url(${CITY_BG})`,backgroundPosition}}>
+
+        <div className="scene-actors" aria-hidden="true">
+          <div className="traffic-car traffic-car-a"><span/><i/><b/></div>
+          <div className="traffic-car traffic-car-b"><span/><i/><b/></div>
+          <div className="traffic-car traffic-car-c"><span/><i/><b/></div>
+          <div className="traffic-ped traffic-ped-a"><span/><i/><b/><em/></div>
+          <div className="traffic-ped traffic-ped-b"><span/><i/><b/><em/></div>
+          <div className="traffic-ped traffic-ped-c"><span/><i/><b/><em/></div>
+        </div>
         <div className="cinematic"/>
         <div className="grain"/>
 
@@ -119,7 +121,15 @@ export default function Home(){
         ))}
 
         <div className={`player-tag ${inCar?"car":"walk"}`} style={{left:`${position.x}%`,top:`${position.y}%`}}>
-          <div className="player-avatar"><span/></div>
+          <div className="player-avatar">
+            <span className="player-head"/>
+            <span className="player-neck"/>
+            <span className="player-body"/>
+            <span className="player-arm player-arm-left"/>
+            <span className="player-arm player-arm-right"/>
+            <span className="player-leg player-leg-left"/>
+            <span className="player-leg player-leg-right"/>
+          </div>
           <b>{inCar?"YOU — DRIVING":"YOU"}</b>
         </div>
 
