@@ -254,9 +254,31 @@ export default function ExtraCity(){
         while(cops.length<needed){const c=makeCar("#f1f1f1",true);c.position.set(active.position.x+18+cops.length*8,.05,active.position.z+18);scene.add(c);cops.push(c);}
         while(cops.length>needed){const c=cops.pop();if(c)scene.remove(c);}
         for(const c of cops){
-          const dx=active.position.x-c.position.x,dz=active.position.z-c.position.z,len=Math.hypot(dx,dz)||1;
-          c.position.x+=(dx/len)*(7+currentWanted*1.8)*dt;c.position.z+=(dz/len)*(7+currentWanted*1.8)*dt;c.rotation.y=Math.atan2(dx,dz);
-          if(c.position.distanceTo(active.position)<2.5){setWanted(Math.min(5,currentWanted+1));}
+          const dx=active.position.x-c.position.x,dz=active.position.z-c.position.z;
+          const len=Math.hypot(dx,dz)||1;
+          const stopDistance=4.2;
+          const chaseSpeed=7+currentWanted*1.8;
+          if(len>stopDistance){
+            const step=Math.min(chaseSpeed*dt,len-stopDistance);
+            c.position.x+=(dx/len)*step;
+            c.position.z+=(dz/len)*step;
+          }
+          c.rotation.y=Math.atan2(dx,dz);
+          // Keep police vehicles from clipping into the player or each other.
+          if(len<stopDistance){
+            const push=(stopDistance-len)+.02;
+            c.position.x-=(dx/len)*push;
+            c.position.z-=(dz/len)*push;
+          }
+          for(const other of cops){
+            if(other===c) continue;
+            const ox=c.position.x-other.position.x,oz=c.position.z-other.position.z,od=Math.hypot(ox,oz);
+            if(od>0 && od<3.6){
+              const push=(3.6-od)*.35;
+              c.position.x+=(ox/od)*push;
+              c.position.z+=(oz/od)*push;
+            }
+          }
         }
       } else while(cops.length){const c=cops.pop();if(c)scene.remove(c);}
 
