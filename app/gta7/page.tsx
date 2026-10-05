@@ -31,6 +31,7 @@ function makeHuman(palette:number, panic=false){
   const lShoe=new THREE.Mesh(new THREE.BoxGeometry(.16,.09,.3),shoeMat); lShoe.position.set(-.13,.08,.06);
   const rShoe=lShoe.clone(); rShoe.position.x=.13;
   g.add(head,hairCap,body,lArm,rArm,lLeg,rLeg,lShoe,rShoe);
+  g.userData={lArm,rArm,lLeg,rLeg,walkPhase:palette*.7,baseY:0};
   return g;
 }
 
@@ -87,23 +88,31 @@ export default function ExtraCity(){
     renderer.shadowMap.enabled=true;
     renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure=1.12;
     root.appendChild(renderer.domElement);
 
     const hemi=new THREE.HemisphereLight("#cde8ff","#27351f",1.8); scene.add(hemi);
     const sun=new THREE.DirectionalLight("#fff1d0",3.2); sun.position.set(60,100,30); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); scene.add(sun);
 
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(420,320),new THREE.MeshStandardMaterial({color:"#38533d",roughness:1}));
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(620,440),new THREE.MeshStandardMaterial({color:"#30483a",roughness:1}));
     ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
 
     const roadMat=new THREE.MeshStandardMaterial({color:"#292d31",roughness:.95});
-    const road1=new THREE.Mesh(new THREE.BoxGeometry(420,.08,28),roadMat); road1.position.y=.02; scene.add(road1);
-    const road2=new THREE.Mesh(new THREE.BoxGeometry(28,.08,320),roadMat); road2.position.y=.03; scene.add(road2);
+    const road1=new THREE.Mesh(new THREE.BoxGeometry(620,.08,30),roadMat); road1.position.y=.02; scene.add(road1);
+    const roadNorth=new THREE.Mesh(new THREE.BoxGeometry(620,.08,22),roadMat); roadNorth.position.set(0,.025,-82); scene.add(roadNorth);
+    const roadSouth=new THREE.Mesh(new THREE.BoxGeometry(620,.08,22),roadMat); roadSouth.position.set(0,.025,82); scene.add(roadSouth);
+    const road2=new THREE.Mesh(new THREE.BoxGeometry(30,.08,440),roadMat); road2.position.y=.03; scene.add(road2);
+    for(const x of [-150,-75,75,150]){
+      const r=new THREE.Mesh(new THREE.BoxGeometry(18,.08,440),roadMat);
+      r.position.set(x,.035,0); scene.add(r);
+    }
     const road3=new THREE.Mesh(new THREE.BoxGeometry(420,.08,20),roadMat); road3.position.set(0,.04,-82); scene.add(road3);
     const laneMat=new THREE.MeshStandardMaterial({color:"#d7bd62",roughness:1});
-    for(let x=-195;x<195;x+=12){const m=new THREE.Mesh(new THREE.BoxGeometry(6,.02,.12),laneMat);m.position.set(x,.09,0);scene.add(m);}
-    for(let z=-145;z<145;z+=12){const m=new THREE.Mesh(new THREE.BoxGeometry(.12,.02,6),laneMat);m.position.set(0,.09,z);scene.add(m);}
+    for(const z of [0,-82,82]) for(let x=-300;x<300;x+=12){const m=new THREE.Mesh(new THREE.BoxGeometry(6,.02,.12),laneMat);m.position.set(x,.09,z);scene.add(m);}
+    for(const x of [-150,-75,0,75,150]) for(let z=-210;z<210;z+=12){const m=new THREE.Mesh(new THREE.BoxGeometry(.12,.02,6),laneMat);m.position.set(x,.09,z);scene.add(m);}
 
-    const buildingMats=["#555b60","#66554c","#4d6259","#6a6460","#4c5663"];
+    const buildingMats=["#555b60","#66554c","#4d6259","#6a6460","#4c5663","#765a4c","#405a67"];
     for(let i=0;i<58;i++){
       const x=((i*37)%390)-195, z=((i*61)%285)-142;
       if(Math.abs(x)<22 || Math.abs(z)<17 || (Math.abs(z+82)<13)) continue;
@@ -116,12 +125,42 @@ export default function ExtraCity(){
       }
     }
 
+    const districtZones=[
+      {name:"DOWNTOWN",x:0,z:-55,w:140,d:55},
+      {name:"OLD MARKET",x:-115,z:65,w:90,d:90},
+      {name:"INDUSTRIAL",x:115,z:70,w:90,d:85},
+      {name:"SUNSET HEIGHTS",x:0,z:145,w:210,d:55}
+    ];
+    for(const [di,zone] of districtZones.entries()){
+      for(let j=0;j<10;j++){
+        const px=zone.x+(Math.random()-.5)*zone.w;
+        const pz=zone.z+(Math.random()-.5)*zone.d;
+        const tree=new THREE.Group();
+        const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.14,.2,1.5,7),new THREE.MeshStandardMaterial({color:"#5b3e29",roughness:1}));
+        trunk.position.y=.75;
+        const crown=new THREE.Mesh(new THREE.SphereGeometry(.75+(j%3)*.12,8,7),new THREE.MeshStandardMaterial({color:["#315d3a","#3f7047","#526d3e","#284f3a"][di],roughness:1}));
+        crown.position.y=1.8; tree.add(trunk,crown); tree.position.set(px,0,pz); tree.castShadow=true; scene.add(tree);
+      }
+      for(let j=0;j<7;j++){
+        const sx=zone.x-zone.w/2+j*(zone.w/6);
+        const pole=new THREE.Group();
+        const stem=new THREE.Mesh(new THREE.CylinderGeometry(.035,.05,3.4,6),new THREE.MeshStandardMaterial({color:"#252b30",metalness:.6,roughness:.45}));
+        const lamp=new THREE.Mesh(new THREE.SphereGeometry(.11,8,6),new THREE.MeshStandardMaterial({color:"#fff1b0",emissive:"#5a4518",emissiveIntensity:2}));
+        stem.position.y=1.7; lamp.position.set(0,3.35,0); pole.add(stem,lamp); pole.position.set(sx,.05,zone.z-zone.d/2); scene.add(pole);
+      }
+    }
+    const sidewalkMat=new THREE.MeshStandardMaterial({color:"#777b78",roughness:.95});
+    for(const z of [-15,15,-93,-71,67,97]){const s=new THREE.Mesh(new THREE.BoxGeometry(620,.12,3.5),sidewalkMat);s.position.set(0,.08,z);scene.add(s);}
+    for(const x of [-165,-135,-90,-60,-15,15,60,90,135,165]){const s=new THREE.Mesh(new THREE.BoxGeometry(3.5,.12,440),sidewalkMat);s.position.set(x,.08,0);scene.add(s);}
     const player=makeHuman(2); player.scale.setScalar(1.12); player.position.set(0,0,6); player.castShadow=true; scene.add(player);
     let playerCar:THREE.Group|null=null;
     const traffic:THREE.Group[]=[];
+    const trafficSpeeds:number[]=[];
     const trafficColors=["#d44b4b","#3f78c9","#d5b23f","#4b9b6a","#8255a9","#d97745"];
     for(let i=0;i<18;i++){
-      const c=makeCar(trafficColors[i%trafficColors.length]); c.position.set(((i*31)%360)-180,.05,((i*47)%250)-125); c.rotation.y=i%2?Math.PI/2:0; c.castShadow=true; scene.add(c); traffic.push(c);
+      const c=makeCar(trafficColors[i%trafficColors.length]); c.position.set(((i*31)%360)-180,.05,((i%5)*75)-150);
+      if(i%3===0)c.rotation.y=Math.PI/2;
+      trafficSpeeds.push(5+(i%6)*1.7); c.castShadow=true; scene.add(c); traffic.push(c);
     }
 
     const people:THREE.Group[]=[];
@@ -179,13 +218,23 @@ export default function ExtraCity(){
 
       for(let i=0;i<traffic.length;i++){
         const c=traffic[i];
-        c.position.z += (i%2?1:-1)*(5+(i%4))*dt;
-        if(c.position.z>155)c.position.z=-155;
-        if(c.position.z<-155)c.position.z=155;
+        if(Math.abs(c.rotation.y-Math.PI/2)<.1 || Math.abs(c.rotation.y+Math.PI/2)<.1){
+          c.position.x += (i%2?1:-1)*trafficSpeeds[i]*dt;
+          if(c.position.x>305)c.position.x=-305;
+          if(c.position.x<-305)c.position.x=305;
+        } else {
+          c.position.z += (i%2?1:-1)*trafficSpeeds[i]*dt;
+          if(c.position.z>215)c.position.z=-215;
+          if(c.position.z<-215)c.position.z=215;
+        }
       }
       for(const [i,h] of people.entries()){
+        const phase=elapsed*4+(h.userData.walkPhase||0);
+        const joints=h.userData;
+        if(joints.lArm){joints.lArm.rotation.x=Math.sin(phase)*.22;joints.rArm.rotation.x=-Math.sin(phase)*.22;joints.lLeg.rotation.x=-Math.sin(phase)*.2;joints.rLeg.rotation.x=Math.sin(phase)*.2;}
         h.position.x += Math.sin(elapsed*.35+i)*.35*dt;
         h.position.z += Math.cos(elapsed*.3+i*.7)*.3*dt;
+        h.rotation.y=Math.atan2(Math.cos(elapsed*.3+i*.7),Math.sin(elapsed*.35+i));
         if(currentWanted>0 && h.position.distanceTo(active.position)<12){
           h.position.x += (h.position.x-active.position.x)*dt*2.4;
           h.position.z += (h.position.z-active.position.z)*dt*2.4;
@@ -243,7 +292,7 @@ export default function ExtraCity(){
 
   return <main style={{height:"100vh",background:"#070b0f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
     <header style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px",background:"#080c10",borderBottom:"1px solid #27323a",position:"relative",zIndex:10}}>
-      <div><div style={{fontSize:22,fontWeight:900,letterSpacing:4}}>EXTRA CITY</div><div style={{fontSize:10,color:"#87949c",letterSpacing:2}}>3D OPEN-WORLD PROTOTYPE • BUILD 05</div></div>
+      <div><div style={{fontSize:22,fontWeight:900,letterSpacing:4}}>EXTRA CITY</div><div style={{fontSize:10,color:"#87949c",letterSpacing:2}}>OPEN-WORLD VERTICAL SLICE • BUILD 06</div></div>
       <div style={{display:"flex",gap:22,fontWeight:800}}><span style={{color:"#6ee7a0"}}>{"$"+cash.toLocaleString()}</span><span style={{color:wanted?"#ff5555":"#7e8990"}}>{wanted?"★".repeat(wanted):"NO WANTED"}</span><span>{rain?"RAIN":"CLEAR"}</span></div>
     </header>
     <section style={{position:"relative",height:"calc(100vh - 64px)"}}>
@@ -255,7 +304,7 @@ export default function ExtraCity(){
       </aside>
       <div style={{position:"absolute",right:18,top:18,padding:"10px 14px",background:"#070b0edb",border:"1px solid #33414a",borderRadius:10,fontSize:11,zIndex:5}}>{time>=19||time<6?"NIGHT":"DAY"} • {rain?"RAIN":"CLEAR"} • {Math.floor(time).toString().padStart(2,"0")}:{Math.floor((time%1)*60).toString().padStart(2,"0")}</div>
       <div style={{position:"absolute",left:18,bottom:18,padding:"10px 14px",background:"#070b0eee",border:"1px solid #33414a",borderRadius:10,fontSize:12,zIndex:5}}>{message}</div>
-      <div style={{position:"absolute",right:18,bottom:18,padding:"10px 14px",background:"#070b0eee",border:"1px solid #33414a",borderRadius:10,color:"#aeb8be",fontSize:11,zIndex:5}}>3D WORLD • HUMAN NPCs • TRAFFIC • POLICE</div>
+      <div style={{position:"absolute",right:18,bottom:18,padding:"10px 14px",background:"#070b0eee",border:"1px solid #33414a",borderRadius:10,color:"#aeb8be",fontSize:11,zIndex:5}}>DOWNTOWN • OLD MARKET • INDUSTRIAL • SUNSET HEIGHTS</div>
     </section>
   </main>;
 }
