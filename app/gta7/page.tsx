@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 type Job = "delivery" | "escape" | "checkpoint";
+type JobStage = "go" | "return";
 
 const jobs:Record<Job,{name:string;reward:number;target:THREE.Vector3}> = {
   delivery:{name:"NIGHT DELIVERY",reward:1500,target:new THREE.Vector3(70,0,-90)},
@@ -61,14 +62,16 @@ export default function ExtraCity(){
   const [cash,setCash]=useState(1250);
   const [wanted,setWanted]=useState(0);
   const [job,setJob]=useState<Job|null>(null);
+  const [jobStage,setJobStage]=useState<JobStage>("go");
   const [message,setMessage]=useState("Welcome to EXTRA CITY.");
   const [district,setDistrict]=useState("DOWNTOWN");
   const [time,setTime]=useState(18.5);
   const [rain,setRain]=useState(false);
   const [inCar,setInCar]=useState(false);
-  const inCarRef=useRef(false), jobRef=useRef<Job|null>(null), rainRef=useRef(false), wantedRef=useRef(0), districtRef=useRef("DOWNTOWN");
+  const inCarRef=useRef(false), jobRef=useRef<Job|null>(null), jobStageRef=useRef<JobStage>("go"), rainRef=useRef(false), wantedRef=useRef(0), districtRef=useRef("DOWNTOWN");
   useEffect(()=>{inCarRef.current=inCar;},[inCar]);
   useEffect(()=>{jobRef.current=job;},[job]);
+  useEffect(()=>{jobStageRef.current=jobStage;},[jobStage]);
   useEffect(()=>{rainRef.current=rain;},[rain]);
   useEffect(()=>{wantedRef.current=wanted;},[wanted]);
   useEffect(()=>{districtRef.current=district;},[district]);
@@ -188,7 +191,8 @@ export default function ExtraCity(){
         });
       }
       if(k==="m" && !job){
-        setJob(prev=>prev?prev:"delivery");
+        setJob("delivery");
+        setJobStage("go");
         setMessage("JOB: NIGHT DELIVERY — reach the yellow marker.");
         missionMarker.visible=true; missionMarker.position.copy(jobs.delivery.target);
       }
@@ -204,6 +208,7 @@ export default function ExtraCity(){
       const dt=Math.min(clock.getDelta(),.035); elapsed+=dt;
       const driving=inCarRef.current;
       const currentJob=jobRef.current;
+      const currentStage=jobStageRef.current;
       const raining=rainRef.current;
       const currentWanted=wantedRef.current;
       const speed=driving?13:6.5;
@@ -279,11 +284,23 @@ export default function ExtraCity(){
       } else {const rg=scene.getObjectByName("rain");if(rg)scene.remove(rg);}
 
       if(currentJob){
-        const target=jobs[currentJob].target;
-        missionMarker.visible=true;missionMarker.position.copy(target);missionMarker.position.y=.12;
+        const target=currentStage==="return"?new THREE.Vector3(0,0,6):jobs[currentJob].target;
+        missionMarker.visible=true;
+        missionMarker.position.copy(target);
+        missionMarker.position.y=.12;
         if(active.position.distanceTo(target)<3){
-          if(currentJob==="checkpoint"){setMessage("Checkpoint reached — head back to the start.");}
-          else {setCash(v=>v+jobs[currentJob].reward);setMessage(currentJob==="delivery"?"NIGHT DELIVERY complete. +$1,500":"CLEAN GETAWAY complete. +$2,800");setJob(null);missionMarker.visible=false;setWanted(0);}
+          if(currentJob==="checkpoint" && currentStage==="go"){
+            setJobStage("return");
+            setMessage("CHECKPOINT reached — return to the starting point.");
+            setWanted(1);
+          } else {
+            setCash(v=>v+jobs[currentJob].reward);
+            setMessage(currentJob==="delivery"?"NIGHT DELIVERY complete. +$1,500":currentJob==="escape"?"CLEAN GETAWAY complete. +$2,800":"CITY CHECKPOINT complete. +$2,200");
+            setJob(null);
+            setJobStage("go");
+            missionMarker.visible=false;
+            setWanted(0);
+          }
         }
       }
 
@@ -298,14 +315,14 @@ export default function ExtraCity(){
 
   return <main style={{height:"100vh",background:"#070b0f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
     <header style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px",background:"#080c10",borderBottom:"1px solid #27323a",position:"relative",zIndex:10}}>
-      <div><div style={{fontSize:22,fontWeight:900,letterSpacing:4}}>EXTRA CITY</div><div style={{fontSize:10,color:"#87949c",letterSpacing:2}}>OPEN-WORLD VERTICAL SLICE • BUILD 06</div></div>
+      <div><div style={{fontSize:22,fontWeight:900,letterSpacing:4}}>EXTRA CITY</div><div style={{fontSize:10,color:"#87949c",letterSpacing:2}}>OPEN-WORLD VERTICAL SLICE • BUILD 08</div></div>
       <div style={{display:"flex",gap:22,fontWeight:800}}><span style={{color:"#6ee7a0"}}>{"$"+cash.toLocaleString()}</span><span style={{color:wanted?"#ff5555":"#7e8990"}}>{wanted?"★".repeat(wanted):"NO WANTED"}</span><span>{rain?"RAIN":"CLEAR"}</span></div>
     </header>
     <section style={{position:"relative",height:"calc(100vh - 64px)"}}>
       <div ref={mount} style={{position:"absolute",inset:0}}/>
       <aside style={{position:"absolute",left:18,top:18,width:310,padding:18,background:"#070b0edb",border:"1px solid #33414a",borderRadius:14,backdropFilter:"blur(12px)",zIndex:5}}>
-        <div style={{fontSize:17,fontWeight:900}}>3D CITY</div>
-        <div style={{marginTop:8,color:"#aeb8be",fontSize:13,lineHeight:1.5}}>{job?jobs[job].name+" — follow the yellow marker.":"Press M to start a job."}</div>
+        <div style={{fontSize:17,fontWeight:900}}>EXTRA CITY <span style={{fontSize:10,color:"#6ee7a0",letterSpacing:1}}>PLAYABLE DEMO</span></div>
+        <div style={{marginTop:8,color:"#aeb8be",fontSize:13,lineHeight:1.5}}>{job?jobs[job].name+" — "+(jobStage==="return"?"return to the start.":"follow the yellow marker."):"Press M to start a job."}</div>
         <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #29343b",color:"#8c99a1",fontSize:11,lineHeight:1.9}}>WASD / ARROWS — MOVE / DRIVE<br/>E — ENTER / EXIT CAR<br/>M — START JOB<br/>R — TOGGLE RAIN<br/>CAMERA — THIRD PERSON</div>
       </aside>
       <div style={{position:"absolute",right:18,top:18,padding:"10px 14px",background:"#070b0edb",border:"1px solid #33414a",borderRadius:10,fontSize:11,zIndex:5}}>{district} • {time>=19||time<6?"NIGHT":"DAY"} • {rain?"RAIN":"CLEAR"} • {Math.floor(time).toString().padStart(2,"0")}:{Math.floor((time%1)*60).toString().padStart(2,"0")}</div>
