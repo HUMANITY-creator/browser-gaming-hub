@@ -36,7 +36,7 @@ function makeHuman(palette:number, panic=false){
   const lShoe=new THREE.Mesh(new THREE.BoxGeometry(.16,.09,.3),shoeMat); lShoe.position.set(-.13,.08,.06);
   const rShoe=lShoe.clone(); rShoe.position.x=.13;
   g.add(head,neck,hairCap,eyeL,eyeR,body,lArm,rArm,lLeg,rLeg,lShoe,rShoe);
-  g.userData={lArm,rArm,lLeg,rLeg,walkPhase:palette*.7,baseY:0};
+  g.userData={lArm,rArm,lLeg,rLeg,walkPhase:palette*.7,baseY:0,head,hairCap,body};
   return g;
 }
 
@@ -255,13 +255,23 @@ export default function ExtraCity(){
         }
       }
       for(const [i,h] of people.entries()){
+        const dangerRadius=currentWanted>0?16:5;
         const phase=elapsed*4+(h.userData.walkPhase||0);
         const joints=h.userData;
-        if(joints.lArm){joints.lArm.rotation.x=Math.sin(phase)*.22;joints.rArm.rotation.x=-Math.sin(phase)*.22;joints.lLeg.rotation.x=-Math.sin(phase)*.2;joints.rLeg.rotation.x=Math.sin(phase)*.2;}
+        if(joints.lArm){
+          joints.lArm.rotation.x=Math.sin(phase)*.28;
+          joints.rArm.rotation.x=-Math.sin(phase)*.28;
+          joints.lLeg.rotation.x=-Math.sin(phase)*.24;
+          joints.rLeg.rotation.x=Math.sin(phase)*.24;
+          const bob=Math.abs(Math.sin(phase))*0.025;
+          h.position.y=bob;
+          joints.head.rotation.y=Math.sin(phase*.5)*.05;
+          joints.hairCap.rotation.y=Math.sin(phase*.5)*.05;
+        }
         h.position.x += Math.sin(elapsed*.35+i)*.35*dt;
         h.position.z += Math.cos(elapsed*.3+i*.7)*.3*dt;
         h.rotation.y=Math.atan2(Math.cos(elapsed*.3+i*.7),Math.sin(elapsed*.35+i));
-        if(currentWanted>0 && h.position.distanceTo(active.position)<12){
+        if(currentWanted>0 && h.position.distanceTo(active.position)<dangerRadius){
           h.position.x += (h.position.x-active.position.x)*dt*2.4;
           h.position.z += (h.position.z-active.position.z)*dt*2.4;
         }
@@ -357,7 +367,7 @@ export default function ExtraCity(){
 
   return <main style={{height:"100vh",background:"#070b0f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
     <header style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px",background:"#080c10",borderBottom:"1px solid #27323a",position:"relative",zIndex:10}}>
-      <div><div style={{fontSize:22,fontWeight:900,letterSpacing:4}}>EXTRA CITY</div><div style={{fontSize:10,color:"#87949c",letterSpacing:2}}>OPEN-WORLD VERTICAL SLICE • BUILD 08</div></div>
+      <div><div style={{fontSize:22,fontWeight:900,letterSpacing:4}}>EXTRA CITY</div><div style={{fontSize:10,color:"#87949c",letterSpacing:2}}>AAA-STYLE OPEN-WORLD VERTICAL SLICE • BUILD 11</div></div>
       <div style={{display:"flex",gap:22,fontWeight:800}}><span style={{color:"#6ee7a0"}}>{"$"+cash.toLocaleString()}</span><span style={{color:wanted?"#ff5555":"#7e8990"}}>{wanted?"★".repeat(wanted):"NO WANTED"}</span><span>{rain?"RAIN":"CLEAR"}</span></div>
     </header>
     <section style={{position:"relative",height:"calc(100vh - 64px)"}}>
