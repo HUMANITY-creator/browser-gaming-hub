@@ -16,6 +16,7 @@ export default function ExtraCity() {
   const [cash,setCash] = useState(1250);
   const [mission,setMission] = useState<"idle"|"active"|"done">("idle");
   const [car,setCar] = useState<number|null>(null);
+  const [police,setPolice] = useState<Array<{id:number,x:number,y:number}>>([]);
   const keys = useRef(new Set<string>());
   const target = useMemo(()=>({x:2350,y:620}),[]);
   const msg = mission==="idle" ? "Press M to start NIGHT RUN." : mission==="active" ? "Reach the yellow target." : "MISSION COMPLETE. Explore EXTRA CITY.";
@@ -30,7 +31,7 @@ export default function ExtraCity() {
         setCars(cs=>{
           let best=-1, bd=95;
           cs.forEach(c=>{const z=d(p,c); if(z<bd){bd=z;best=c.id;}});
-          if(best>=0){setCar(best);setWanted(w=>Math.max(1,w));}
+          if(best>=0){setCar(best);setWanted(w=>Math.min(5,Math.max(1,w)));}
           return cs;
         });
       }
@@ -53,7 +54,7 @@ export default function ExtraCity() {
         if(mission==="active" && d(n,target)<120){setMission("done");setCash(v=>v+1500);setWanted(0)}
         return n;
       });
-      setCars(cs=>cs.map(c=>c.id===car?{...c,x:p.x,y:p.y}:({...c,x:c.x+Math.sin(now/900+c.id)*dt*15})));
+      setCars(cs=>cs.map(c=>c.id===car?{...c,x:p.x,y:p.y}:({...c,x:c.x+Math.sin(now/900+c.id)*dt*15})));\n      setPolice(ps=>wanted?ps.length<wanted?Array.from({length:wanted},(_,i)=>({id:i,x:p.x+300+i*70,y:p.y-250})):ps.map(q=>({id:q.id,x:q.x+(p.x-q.x)*dt*.35,y:q.y+(p.y-q.y)*dt*.35})):[]);
       raf=requestAnimationFrame(loop);
     };
     raf=requestAnimationFrame(loop); return()=>cancelAnimationFrame(raf);
@@ -83,7 +84,7 @@ export default function ExtraCity() {
         {buildings.map((b,i)=><div key={i} style={{position:"absolute",left:b.x,top:b.y,width:b.w,height:b.h,background:i%4===0?"#685149":"#58625b",border:"2px solid #303a35",borderRadius:4}}>
           <div style={{padding:8,fontSize:9,fontWeight:900,color:"#c7ceca"}}>{["MOTEL","AUTO","MARKET","WAREHOUSE"][i%4]}</div>
         </div>)}
-        {cars.map(c=><div key={c.id} style={{position:"absolute",left:c.x-25,top:c.y-12,width:50,height:24,borderRadius:7,background:c.color,border:c.id===car?"3px solid white":"2px solid #14191c",zIndex:6,boxShadow:"0 4px 10px #0006"}}>
+        {police.map(q=><div key={"police"+q.id} style={{position:"absolute",left:q.x-28,top:q.y-14,width:56,height:28,borderRadius:6,background:"#f2f2f2",border:"2px solid #1a1e21",zIndex:7}}><div style={{height:8,background:"#2563eb"}}/><div style={{position:"absolute",left:8,top:13,width:40,height:6,background:"#20262a",borderRadius:2}}/></div>)}\n        {cars.map(c=> <div key={c.id} style={{position:"absolute",left:c.x-25,top:c.y-12,width:50,height:24,borderRadius:7,background:c.color,border:c.id===car?"3px solid white":"2px solid #14191c",zIndex:6,boxShadow:"0 4px 10px #0006"}}>
           <div style={{position:"absolute",left:10,top:4,width:26,height:15,background:"#20282c",borderRadius:3}}/>
         </div>)}
         {mission==="active"&&<div style={{position:"absolute",left:target.x-48,top:target.y-48,width:96,height:96,border:"3px solid #ffd84d",borderRadius:"50%",boxShadow:"0 0 35px #ffd84d55",zIndex:4}}/>}
