@@ -2,166 +2,219 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const CITY_BG="https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&w=2400&q=92";
+type Point = { x: number; y: number };
+type Actor = { id: string; x: number; y: number; scale: number; delay: number };
 
-type Zone={id:string;label:string;x:number;y:number;reward:number};
-const zones:Zone[]=[
-  {id:"job",label:"JOB CENTER",x:57,y:43,reward:300},
-  {id:"garage",label:"GARAGE",x:36,y:63,reward:450},
-  {id:"club",label:"SUNSET",x:73,y:55,reward:550},
+const buildings = [
+  { id: "b1", x: 5, y: 40, w: 13, h: 46, depth: 2 },
+  { id: "b2", x: 18, y: 31, w: 10, h: 55, depth: 1 },
+  { id: "b3", x: 30, y: 23, w: 13, h: 63, depth: 3 },
+  { id: "b4", x: 46, y: 17, w: 9, h: 69, depth: 2 },
+  { id: "b5", x: 58, y: 28, w: 12, h: 58, depth: 4 },
+  { id: "b6", x: 72, y: 19, w: 10, h: 67, depth: 1 },
+  { id: "b7", x: 84, y: 37, w: 12, h: 49, depth: 3 },
 ];
 
-export default function Home(){
-  const [cash,setCash]=useState(2450);
-  const [level,setLevel]=useState(1);
-  const [xp,setXp]=useState(90);
-  const [wanted,setWanted]=useState(0);
-  const [mission,setMission]=useState("Go to the local job center");
-  const [messages,setMessages]=useState(["Jay — You free later?","Mom — Dinner at 7. Lmk.","Job Center — New opportunity available!"]);
-  const [phoneOpen,setPhoneOpen]=useState(true);
-  const [inCar,setInCar]=useState(false);
-  const [position,setPosition]=useState({x:50,y:58});
-  const [toast,setToast]=useState("Welcome to CITYLINE");
-  const [time]=useState("7:42 PM");
+const traffic: Actor[] = [
+  { id: "c1", x: 32, y: 74, scale: 0.8, delay: -2 },
+  { id: "c2", x: 59, y: 78, scale: 0.62, delay: -8 },
+  { id: "c3", x: 72, y: 71, scale: 0.48, delay: -5 },
+  { id: "c4", x: 43, y: 82, scale: 0.52, delay: -12 },
+];
 
-  useEffect(()=>{
-    const onKey=(e:KeyboardEvent)=>{
-      const k=e.key.toLowerCase();
-      if(!["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","e","f","m"].includes(k)) return;
-      e.preventDefault();
-      const step=1.8;
-      setPosition(prev=>({
-        x:Math.max(28,Math.min(72,prev.x+(k==="a"||k==="arrowleft"?-step:k==="d"||k==="arrowright"?step:0))),
-        y:Math.max(30,Math.min(78,prev.y+(k==="w"||k==="arrowup"?-step:k==="s"||k==="arrowdown"?step:0)))
+const pedestrians: Actor[] = [
+  { id: "p1", x: 31, y: 66, scale: 0.9, delay: -2 },
+  { id: "p2", x: 56, y: 68, scale: 0.8, delay: -4 },
+  { id: "p3", x: 69, y: 64, scale: 0.68, delay: -6 },
+  { id: "p4", x: 84, y: 70, scale: 0.7, delay: -1 },
+  { id: "p5", x: 24, y: 60, scale: 0.58, delay: -5 },
+];
+
+export default function Home() {
+  const [cash, setCash] = useState(2450);
+  const [xp, setXp] = useState(120);
+  const [level, setLevel] = useState(1);
+  const [wanted, setWanted] = useState(0);
+  const [mission, setMission] = useState("Reach the Riverside drop");
+  const [phoneOpen, setPhoneOpen] = useState(true);
+  const [inCar, setInCar] = useState(false);
+  const [camera, setCamera] = useState<Point>({ x: 50, y: 50 });
+  const [toast, setToast] = useState("CITYLINE ONLINE");
+  const [time, setTime] = useState("7:42 PM");
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setTime(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    }, 30000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (!["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "e", "f", "m"].includes(key)) return;
+      event.preventDefault();
+
+      if (key === "m") {
+        setPhoneOpen((value) => !value);
+        return;
+      }
+
+      if (key === "e") {
+        setCash((value) => value + 250);
+        setXp((value) => value + 30);
+        setMission("Drive to the Harbor contact");
+        setToast("Mission complete • +$250");
+        return;
+      }
+
+      if (key === "f") {
+        setInCar((value) => !value);
+        setToast(inCar ? "On foot" : "Vehicle entered");
+        return;
+      }
+
+      const speed = inCar ? 3.2 : 2.1;
+      setCamera((prev) => ({
+        x: Math.max(12, Math.min(88, prev.x + (key === "a" || key === "arrowleft" ? -speed : key === "d" || key === "arrowright" ? speed : 0))),
+        y: Math.max(28, Math.min(72, prev.y + (key === "w" || key === "arrowup" ? -speed : key === "s" || key === "arrowdown" ? speed : 0))),
       }));
-      if(k==="e") interact();
-      if(k==="f") toggleVehicle();
-      if(k==="m") setPhoneOpen(v=>!v);
     };
-    addEventListener("keydown",onKey);
-    return()=>removeEventListener("keydown",onKey);
-  },[inCar]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [inCar]);
 
-  const backgroundPosition=useMemo(()=>`${position.x}% ${position.y}%`,[position]);
+  const sceneStyle = useMemo(
+    () => ({ transform: "translate3d(" + (50 - camera.x) * 0.5 + "%, " + (50 - camera.y) * 0.28 + "%, 0)" }),
+    [camera]
+  );
 
-  function gain(reward:number,text:string){
-    setCash(v=>v+reward);
-    setXp(v=>{
-      const next=v+Math.round(reward/8);
-      if(next>=1000){setLevel(l=>l+1);return next-1000;}
+  const giveReward = (amount: number, nextMission: string) => {
+    setCash((value) => value + amount);
+    setXp((value) => {
+      const next = value + Math.floor(amount / 7);
+      if (next >= 1000) {
+        setLevel((current) => current + 1);
+        return next - 1000;
+      }
       return next;
     });
-    setToast(text);
-  }
-
-  function interact(){
-    gain(250,"Mission updated • +$250");
-    setMission("Deliver the package to Riverside");
-    setMessages(m=>["Job Center — Route updated.",...m].slice(0,3));
-  }
-
-  function toggleVehicle(){
-    setInCar(v=>!v);
-    setToast(!inCar?"Vehicle entered • F to exit":"Vehicle exited");
-  }
-
-  function hitZone(zone:Zone){
-    gain(zone.reward,`${zone.label} complete • +$${zone.reward}`);
-    setMission(zone.id==="job"?"Deliver the package to Riverside":zone.id==="garage"?"Tune your ride":"Meet the contact");
-    if(zone.id==="club")setWanted(v=>Math.min(5,v+1));
-  }
+    setMission(nextMission);
+    setToast("+$" + amount + " • " + nextMission);
+  };
 
   return (
     <main className="game-shell">
-      <section className="world" style={{backgroundImage:`url(${CITY_BG})`,backgroundPosition}}>
+      <section className="game-world">
+        <div className="sky" />
+        <div className="sun" />
+        <div className="cloud cloud-1" />
+        <div className="cloud cloud-2" />
 
-        <div className="scene-actors" aria-hidden="true">
-          <div className="traffic-car traffic-car-a"><span/><i/><b/></div>
-          <div className="traffic-car traffic-car-b"><span/><i/><b/></div>
-          <div className="traffic-car traffic-car-c"><span/><i/><b/></div>
-          <div className="traffic-ped traffic-ped-a"><span/><i/><b/><em/></div>
-          <div className="traffic-ped traffic-ped-b"><span/><i/><b/><em/></div>
-          <div className="traffic-ped traffic-ped-c"><span/><i/><b/><em/></div>
-        </div>
-        <div className="cinematic"/>
-        <div className="grain"/>
+        <div className="scene" style={sceneStyle}>
+          <div className="distant-hills"><span /><span /><span /></div>
 
-        <header className="topbar">
-          <div className="logo">CITYLINE<small>FREE OPEN WORLD</small></div>
-          <button className="top-action" onClick={interact} aria-label="Interact">INTERACT <span>→</span></button>
-          <div className="wallet">
-            <div className="cash-line"><span>◉</span> ${cash.toLocaleString()}</div>
-            <div className="level-row"><b>LEVEL {level}</b><i><em style={{width:`${xp/10}%`}}/></i><small>{xp}/1,000</small></div>
-            <div className="wanted">WANTED {"★".repeat(wanted)}<span>{"★".repeat(5-wanted)}</span></div>
+          <div className="city-backdrop">
+            {buildings.map((building) => (
+              <div key={building.id} className={"building building-" + building.depth} style={{ left: building.x + "%", top: building.y + "%", width: building.w + "%", height: building.h + "%" }}>
+                <span className="building-cap" />
+                <span className="building-glass" />
+                <span className="building-sign">CITYLINE</span>
+              </div>
+            ))}
           </div>
-        </header>
 
-        <aside className="mission-card">
+          <div className="street-system">
+            <div className="boulevard" />
+            <div className="cross-road cross-road-left" />
+            <div className="cross-road cross-road-right" />
+            <div className="lane-mark lane-a" />
+            <div className="lane-mark lane-b" />
+            <div className="crosswalk crosswalk-a" />
+            <div className="crosswalk crosswalk-b" />
+          </div>
+
+          <div className="props">
+            <div className="billboard billboard-a"><b>BETTER</b><span>TOMORROW</span></div>
+            <div className="billboard billboard-b"><b>RIVERSIDE</b><span>LIVE HERE</span></div>
+            <div className="gas-station"><span>24</span><b>FUEL</b></div>
+            <div className="lamp lamp-a" />
+            <div className="lamp lamp-b" />
+          </div>
+
+          <div className="palm palm-a"><i /><b /><span /></div>
+          <div className="palm palm-b"><i /><b /><span /></div>
+
+          <div className="traffic">
+            {traffic.map((car) => (
+              <div key={car.id} className="npc-car" style={{ left: car.x + "%", top: car.y + "%", "--car-scale": car.scale, "--car-delay": car.delay + "s" } as React.CSSProperties}>
+                <span className="car-roof" /><span className="car-window" />
+                <i className="car-wheel left" /><i className="car-wheel right" />
+                <b className="headlight left" /><b className="headlight right" />
+              </div>
+            ))}
+          </div>
+
+          <div className="pedestrians">
+            {pedestrians.map((ped) => (
+              <div key={ped.id} className="npc-person" style={{ left: ped.x + "%", top: ped.y + "%", "--ped-scale": ped.scale, "--ped-delay": ped.delay + "s" } as React.CSSProperties}>
+                <span className="npc-head" /><span className="npc-torso" />
+                <i className="npc-leg left" /><i className="npc-leg right" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="player-stage">
+          <div className="player-shadow" />
+          <div className={"player " + (inCar ? "driving" : "walking")}>
+            <span className="player-head" /><span className="player-hair" /><span className="player-hoodie" /><span className="player-backpack" />
+            <i className="player-arm left" /><i className="player-arm right" /><i className="player-leg left" /><i className="player-leg right" />
+          </div>
+          {inCar && <div className="player-car"><span /><i /><b /></div>}
+          <div className="player-name">{inCar ? "YOU • DRIVING" : "YOU"}</div>
+        </div>
+
+        <div className="hud hud-logo"><div className="logo">CITYLINE</div><div className="tagline">LIVE. WORK. BUILD.</div></div>
+
+        <div className="hud hud-right">
+          <div className="money">◉ ${cash.toLocaleString()}</div>
+          <div className="hud-level"><b>LEVEL {level}</b><span><i style={{ width: xp / 10 + "%" }} /></span><small>{xp}/1,000</small></div>
+          <div className="wanted">WANTED <strong>{"★".repeat(wanted)}</strong><span>{"★".repeat(5 - wanted)}</span></div>
+        </div>
+
+        <aside className="mission">
+          <div className="mission-title">CURRENT MISSION</div>
           <strong>◆ FIRST STEPS</strong>
           <p>{mission}</p>
-          <strong>✦ STREET CRED</strong>
-          <p>Complete 2 side missions<br/>({Math.min(2,Math.floor(xp/250))}/2)</p>
+          <small>GO TO THE MARKER</small>
         </aside>
 
-        <div className="world-copy">
-          <span>DOWNTOWN / 7:42 PM</span>
-          <h1>A city that feels lived in.</h1>
-          <p>Explore, drive, take jobs, build cash, and make your own route through an original browser city.</p>
-        </div>
-
-        {zones.map(zone=>(
-          <button
-            key={zone.id}
-            className="zone"
-            style={{left:`${zone.x}%`,top:`${zone.y}%`}}
-            onClick={()=>hitZone(zone)}
-          >
-            <span className="zone-dot"/><b>{zone.label}</b>
-          </button>
-        ))}
-
-        <div className={`player-tag ${inCar?"car":"walk"}`} style={{left:`${position.x}%`,top:`${position.y}%`}}>
-          <div className="player-avatar">
-            <span className="player-head"/>
-            <span className="player-neck"/>
-            <span className="player-body"/>
-            <span className="player-arm player-arm-left"/>
-            <span className="player-arm player-arm-right"/>
-            <span className="player-leg player-leg-left"/>
-            <span className="player-leg player-leg-right"/>
+        <div className="hud hud-left-bottom">
+          <div className="minimap">
+            <div className="map-grid" />
+            <span className="map-road mr-1" /><span className="map-road mr-2" /><span className="map-road mr-3" />
+            <b className="map-arrow">▲</b><i className="map-point map-point-a">◆</i><i className="map-point map-point-b">●</i>
           </div>
-          <b>{inCar?"YOU — DRIVING":"YOU"}</b>
+          <div className="location-label"><b>⌖ Downtown</b><span>Riverside • 0.6 mi</span></div>
         </div>
 
-        <div className="minimap">
-          <div className="map-roads r1"/><div className="map-roads r2"/><div className="map-roads r3"/>
-          <span className="map-you" style={{left:`${position.x}%`,top:`${position.y}%`}}>▲</span>
-          <i className="map-home">⌂</i><i className="map-job">◆</i><i className="map-car">●</i>
+        <div className="controls"><span><b>W A S D</b> move</span><span><b>E</b> mission</span><span><b>F</b> vehicle</span><span><b>M</b> phone</span></div>
+
+        <div className={"phone " + (phoneOpen ? "open" : "closed")}>
+          <div className="phone-notch" /><div className="phone-top"><span>{time}</span><b>5G</b></div><h3>Messages</h3>
+          {[["J", "Jay", "You free later?"], ["M", "Mom", "Dinner at 7. Lmk."], ["J", "Job Center", "New opportunity available!"]].map(([initial, from, text]) => (
+            <button key={from} className="phone-message" onClick={() => setToast(from + ": " + text)}><b>{initial}</b><span><strong>{from}</strong>{text}</span></button>
+          ))}
+          <div className="phone-apps"><button onClick={() => setToast("Messages")}>✉</button><button onClick={() => setToast("Contacts")}>●</button><button onClick={() => setToast("Map")}>⌖</button><button onClick={() => setPhoneOpen(false)}>⚙</button></div>
         </div>
 
-        <div className="controls">
-          <span><b>W A S D</b> move</span>
-          <span><b>E</b> interact</span>
-          <span><b>F</b> enter / exit vehicle</span>
-          <span><b>M</b> phone</span>
-        </div>
+        {!phoneOpen && <button className="phone-open" onClick={() => setPhoneOpen(true)}>📱</button>}
 
-        <div className="location"><b>⌖ Downtown</b><span>0.6 mi</span></div>
+        <button className="mission-button mission-one" onClick={() => giveReward(300, "Drive to Harbor Avenue")}><span>◆</span> JOB CENTER</button>
+        <button className="mission-button mission-two" onClick={() => giveReward(450, "Tune the car at Riverside Garage")}><span>◆</span> GARAGE</button>
 
-        <div className={`phone ${phoneOpen?"open":"closed"}`}>
-          <div className="phone-head"><span>{time}</span><button onClick={()=>setPhoneOpen(false)}>—</button></div>
-          <h3>Messages</h3>
-          {messages.map((m,i)=>{const [from,...rest]=m.split(" — ");return <button key={i} className="message" onClick={()=>setToast(m)}><b>{from.slice(0,1)}</b><span><strong>{from}</strong>{rest.join(" — ")}</span></button>})}
-          <div className="phone-apps">
-            <button onClick={()=>setToast("Phone")}>☎</button>
-            <button onClick={()=>setToast("Messages")}>✉</button>
-            <button onClick={()=>setToast("Map")}>⌖</button>
-            <button onClick={()=>setPhoneOpen(false)}>⚙</button>
-          </div>
-        </div>
-
-        {!phoneOpen && <button className="phone-launch" onClick={()=>setPhoneOpen(true)}>📱</button>}
-        <div className="play-hint"><b>PLAYABLE</b><span>Click the city, then use W A S D. E = interact · F = vehicle · M = phone</span></div>\n        <div className="toast">{toast}</div>
+        <div className={"toast " + (toast ? "show" : "")}>{toast}</div>
       </section>
     </main>
   );
