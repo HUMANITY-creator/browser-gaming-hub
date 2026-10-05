@@ -151,7 +151,7 @@ export default function ExtraCity(){
         setMessage("JOB: NIGHT DELIVERY — reach the yellow marker.");
         missionMarker.visible=true; missionMarker.position.copy(jobs.delivery.target);
       }
-      if(k==="r"){setRain(v=>!v);setMessage(rain?"Rain stopped.":"Rain started.");}
+      if(k==="r"){setRain(v=>{const next=!v;setMessage(next?"Rain started.":"Rain stopped.");return next;});}
     };
     const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase());
     window.addEventListener("keydown",down); window.addEventListener("keyup",up);
@@ -210,7 +210,7 @@ export default function ExtraCity(){
       const gameHour=(18.5+elapsed*.22)%24;
       const night=gameHour>=19||gameHour<6;
       const sky=night?"#08101a":"#9eb9cc";
-      scene.background.lerp(new THREE.Color(sky),.025); scene.fog?.color.lerp(new THREE.Color(sky),.025);
+      (scene.background as THREE.Color).lerp(new THREE.Color(sky),.025); scene.fog?.color.lerp(new THREE.Color(sky),.025);
       hemi.intensity=night?0.55:1.8; sun.intensity=night?.45:3.2;
       setTime(v=>(v+dt*.22)%24);
 
