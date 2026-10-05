@@ -9,6 +9,7 @@ const d = (a:{x:number,y:number}, b:{x:number,y:number}) => Math.hypot(a.x-b.x,a
 type Car = {id:number,x:number,y:number,angle:number,color:string,speed:number};
 type Ped = {id:number,x:number,y:number,tx:number,ty:number,state:"walk"|"panic"};
 type Cop = {id:number,x:number,y:number,angle:number};
+type MissionKind = "delivery"|"escape"|"checkpoint";
 
 export default function ExtraCity() {
   const [p,setP] = useState({x:1500,y:1050});
@@ -23,26 +24,63 @@ export default function ExtraCity() {
   const [wanted,setWanted] = useState(0);
   const [cash,setCash] = useState(1250);
   const [mission,setMission] = useState<"idle"|"active"|"done">("idle");
+  const [missionKind,setMissionKind] = useState<MissionKind>("delivery");
+  const [missionStep,setMissionStep] = useState(0);
   const [car,setCar] = useState<number|null>(null);
   const [police,setPolice] = useState<Cop[]>([]);
   const [time,setTime] = useState(21.5);
   const [weather,setWeather] = useState<"clear"|"rain">("clear");
+  const [garage,setGarage] = useState(0);
+  const [toast,setToast] = useState("Welcome to EXTRA CITY.");
   const keys = useRef(new Set<string>());
   const target = useMemo(()=>({x:2350,y:620}),[]);
-  const msg = mission==="idle" ? "Press M to start NIGHT RUN." : mission==="active" ? "Reach the yellow target. Lose the cops if they spot you." : "MISSION COMPLETE. Explore EXTRA CITY.";
+  const garageSpot = useMemo(()=>({x:1330,y:910}),[]);
+  const shopSpot = useMemo(()=>({x:850,y:880}),[]);
+  const checkpoint = useMemo(()=>({x:2220,y:1510}),[]);
+  const missionTarget = missionKind==="delivery" ? target : missionKind==="escape" ? garageSpot : checkpoint;
+  const missionText =
+    mission==="idle" ? "Press M to start a job." :
+    mission==="active" ? missionKind==="delivery" ? "Deliver the package to the yellow marker." :
+    missionKind==="escape" ? "Lose the cops, then reach the garage." :
+    "Hit the checkpoint, then return to the blue garage." :
+    "JOB COMPLETE. Pick another route.";
+
+  useEffect(()=>{
+    try {
+      const saved=localStorage.getItem("extra-city-save");
+      if(saved){const s=JSON.parse(saved); if(typeof s.cash==="number")setCash(s.cash); if(typeof s.garage==="number")setGarage(s.garage);}
+    } catch {}
+  },[]);
+
+  useEffect(()=>{
+    localStorage.setItem("extra-city-save",JSON.stringify({cash,garage}));
+  },[cash,garage]);
 
   useEffect(()=>{
     const down=(e:KeyboardEvent)=>{
       const k=e.key.toLowerCase(); keys.current.add(k);
-      if(["w","a","s","d","e","m","r","arrowup","arrowdown","arrowleft","arrowright"].includes(k)) e.preventDefault();
-      if(k==="m" && mission==="idle") { setMission("active"); setWanted(1); }
+      if(["w","a","s","d","e","m","r","g","f","arrowup","arrowdown","arrowleft","arrowright"].includes(k)) e.preventDefault();
+      if(k==="m" && mission!=="active"){
+        const next:MissionKind=missionKind==="delivery"?"escape":missionKind==="escape"?"checkpoint":"delivery";
+        setMissionKind(next); setMission("active"); setMissionStep(0);
+        if(next==="escape") setWanted(2); else setWanted(1);
+        setToast(next==="delivery"?"JOB: NIGHT DELIVERY":next==="escape"?"JOB: CLEAN GETAWAY":"JOB: CITY CHECKPOINT");
+      }
       if(k==="r") setWeather(w=>w==="clear"?"rain":"clear");
+      if(k==="g" && d(p,garageSpot)<150){
+        if(garage===0){setGarage(1);setCash(v=>Math.max(0,v-500));setToast("Garage purchased. Vehicle storage unlocked.");}
+        else {setToast("Garage: your ride is ready.");}
+      }
+      if(k==="f" && d(p,shopSpot)<140){
+        if(cash>=250){setCash(v=>v-250);setToast("City Store: repair kit purchased.");}
+        else setToast("Not enough cash.");
+      }
       if(k==="e"){
-        if(car!==null){ setCar(null); return; }
+        if(car!==null){ setCar(null); setToast("On foot."); return; }
         setCars(cs=>{
           let best=-1,bd=90;
           cs.forEach(c=>{const z=d(p,c);if(z<bd){bd=z;best=c.id;}});
-          if(best>=0){setCar(best);setWanted(w=>Math.min(5,Math.max(1,w+1)));}
+          if(best>=0){setCar(best);setWanted(w=>Math.min(5,Math.max(1,w+1)));setToast("Vehicle acquired. Wanted level increased.");}
           return cs;
         });
       }
@@ -50,7 +88,7 @@ export default function ExtraCity() {
     const up=(e:KeyboardEvent)=>keys.current.delete(e.key.toLowerCase());
     addEventListener("keydown",down); addEventListener("keyup",up);
     return()=>{removeEventListener("keydown",down);removeEventListener("keyup",up)};
-  },[car,mission,p]);
+  },[car,mission,missionKind,p,garage,cash,garageSpot,shopSpot]);
 
   useEffect(()=>{
     let raf=0,last=performance.now(),accel=0,angle=0;
@@ -65,27 +103,20 @@ export default function ExtraCity() {
         accel=clamp(accel,-220,520);
         if(left) angle-=dt*(1.5+Math.abs(accel)/300);
         if(right) angle+=dt*(1.5+Math.abs(accel)/300);
-        setP(old=>({
-          x:clamp(old.x+Math.cos(angle)*accel*dt,70,W-70),
-          y:clamp(old.y+Math.sin(angle)*accel*dt,70,H-70)
-        }));
+        setP(old=>({x:clamp(old.x+Math.cos(angle)*accel*dt,70,W-70),y:clamp(old.y+Math.sin(angle)*accel*dt,70,H-70)}));
         setCars(cs=>cs.map(c=>c.id===car?{...c,x:p.x,y:p.y,angle,speed:Math.abs(accel)}:c));
       } else {
         const vx=(right?1:0)-(left?1:0), vy=(down?1:0)-(up?1:0), len=Math.hypot(vx,vy)||1;
         setP(old=>({x:clamp(old.x+vx/len*250*dt,60,W-60),y:clamp(old.y+vy/len*250*dt,60,H-60)}));
       }
 
-      setCars(cs=>cs.map(c=>c.id===car?c:{
-        ...c,
-        x:clamp(c.x+Math.cos(c.angle)*c.speed*dt,60,W-60),
-        y:clamp(c.y+Math.sin(c.angle)*c.speed*dt,60,H-60)
-      }));
+      setCars(cs=>cs.map(c=>c.id===car?c:{...c,x:clamp(c.x+Math.cos(c.angle)*c.speed*dt,60,W-60),y:clamp(c.y+Math.sin(c.angle)*c.speed*dt,60,H-60)}));
 
       setPeds(ps=>ps.map(n=>{
         const panic=d(n,p)<170 || (wanted>0 && d(n,p)<250);
         const tx=panic?n.x+(n.x-p.x)*2:n.tx, ty=panic?n.y+(n.y-p.y)*2:n.ty;
         const dx=tx-n.x,dy=ty-n.y,len=Math.hypot(dx,dy)||1;
-        let nx=n.x+dx/len*(panic?125:42)*dt, ny=n.y+dy/len*(panic?125:42)*dt;
+        const nx=n.x+dx/len*(panic?125:42)*dt, ny=n.y+dy/len*(panic?125:42)*dt;
         if(!panic && d({x:nx,y:ny},{x:n.tx,y:n.ty})<30){n.tx=180+((n.id*571+now/20)%2640);n.ty=180+((n.id*283+now/30)%1640);}
         return {...n,x:clamp(nx,80,W-80),y:clamp(ny,80,H-80),state:panic?"panic":"walk"};
       }));
@@ -102,17 +133,29 @@ export default function ExtraCity() {
       } else setPolice([]);
 
       setTime(t=>(t+dt*0.35)%24);
-      if(mission==="active" && d(p,target)<115){setMission("done");setCash(v=>v+1500);setWanted(0);}
+
+      if(mission==="active"){
+        if(missionKind==="checkpoint" && missionStep===0 && d(p,checkpoint)<120){setMissionStep(1);setToast("Checkpoint reached. Return to the garage.");}
+        else if(missionKind==="checkpoint" && missionStep===1 && d(p,garageSpot)<130){setMission("done");setCash(v=>v+2200);setWanted(0);setToast("CITY CHECKPOINT complete. +$2,200");}
+        else if(missionKind==="delivery" && d(p,target)<115){setMission("done");setCash(v=>v+1500);setWanted(0);setToast("NIGHT DELIVERY complete. +$1,500");}
+        else if(missionKind==="escape" && wanted===0 && d(p,garageSpot)<130){setMission("done");setCash(v=>v+2800);setToast("CLEAN GETAWAY complete. +$2,800");}
+      }
       raf=requestAnimationFrame(loop);
     };
     raf=requestAnimationFrame(loop); return()=>cancelAnimationFrame(raf);
-  },[car,mission,target,p,wanted]);
+  },[car,mission,missionKind,missionStep,target,checkpoint,garageSpot,p,wanted]);
 
   useEffect(()=>{
     if(!wanted)return;
-    const t=setInterval(()=>setWanted(w=>Math.random()<0.22?Math.max(0,w-1):w),4500);
+    const t=setInterval(()=>setWanted(w=>Math.random()<0.18?Math.max(0,w-1):w),4500);
     return()=>clearInterval(t);
   },[wanted]);
+
+  useEffect(()=>{
+    if(mission!=="done") return;
+    const t=setTimeout(()=>setMission("idle"),2200);
+    return()=>clearTimeout(t);
+  },[mission]);
 
   const camX=clamp(p.x-650,0,W-1300), camY=clamp(p.y-360,0,H-720);
   const night=time>=19||time<6;
@@ -124,27 +167,28 @@ export default function ExtraCity() {
 
   return <main style={{height:"100vh",background:"#080b0e",color:"#f4f7f9",fontFamily:"Arial,sans-serif",overflow:"hidden"}}>
     <header style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px",background:"#090d10",borderBottom:"1px solid #29343b",position:"relative",zIndex:20}}>
-      <div><div style={{fontWeight:900,letterSpacing:3,fontSize:22}}>EXTRA CITY</div><div style={{fontSize:10,color:"#84919a",letterSpacing:2}}>OPEN-WORLD PROTOTYPE • BUILD 02</div></div>
+      <div><div style={{fontWeight:900,letterSpacing:3,fontSize:22}}>EXTRA CITY</div><div style={{fontSize:10,color:"#84919a",letterSpacing:2}}>OPEN-WORLD PROTOTYPE • BUILD 03</div></div>
       <div style={{display:"flex",gap:18,fontWeight:800}}><span style={{color:"#72e3a0"}}>{"$"+cash.toLocaleString()}</span><span style={{color:wanted?"#ff5a5a":"#7d8991",letterSpacing:3}}>{wanted?"★".repeat(wanted):"—"}</span><span style={{color:"#9aa7ae"}}>{weather==="rain"?"RAIN":"CLEAR"}</span></div>
     </header>
     <section style={{position:"relative",height:"calc(100vh - 64px)",overflow:"hidden",background:night?"#18261d":"#426342"}}>
       <div style={{position:"absolute",left:-camX,top:-camY,width:W,height:H,background:night?"#1d3425":"#426342",transition:"background .5s"}}>
         {roads.map((r,i)=><div key={i} style={{position:"absolute",left:r.x,top:r.y,width:r.w,height:r.h,background:night?"#20272b":"#2d3336",boxShadow:"inset 0 0 0 2px #4b5459"}}/>)}
-        {buildings.map((b,i)=><div key={i} style={{position:"absolute",left:b.x,top:b.y,width:b.w,height:b.h,background:i%4===0?"#685149":"#58625b",border:"2px solid #303a35",borderRadius:4,boxShadow:night?"0 0 18px #f4c95d22":"none"}}>
-          <div style={{padding:8,fontSize:9,fontWeight:900,color:"#c7ceca"}}>{["MOTEL","AUTO","MARKET","WAREHOUSE"][i%4]}</div>
-        </div>)}
+        {buildings.map((b,i)=><div key={i} style={{position:"absolute",left:b.x,top:b.y,width:b.w,height:b.h,background:i%4===0?"#685149":"#58625b",border:"2px solid #303a35",borderRadius:4,boxShadow:night?"0 0 18px #f4c95d22":"none"}}><div style={{padding:8,fontSize:9,fontWeight:900,color:"#c7ceca"}}>{["MOTEL","AUTO","MARKET","WAREHOUSE"][i%4]}</div></div>)}
+        <div style={{position:"absolute",left:shopSpot.x-45,top:shopSpot.y-45,width:90,height:90,border:"2px solid #7ae3a2",borderRadius:12,background:"#17342699",zIndex:3}}><div style={{padding:8,fontSize:10,fontWeight:900,color:"#a9f0c6"}}>CITY STORE</div></div>
+        <div style={{position:"absolute",left:garageSpot.x-50,top:garageSpot.y-50,width:100,height:100,border:"2px solid #66b8ff",borderRadius:12,background:"#14314b99",zIndex:3}}><div style={{padding:8,fontSize:10,fontWeight:900,color:"#a9d8ff"}}>GARAGE</div></div>
         {peds.map(n=><div key={"ped"+n.id} style={{position:"absolute",left:n.x-6,top:n.y-9,width:12,height:18,borderRadius:5,background:n.state==="panic"?"#ffbd55":"#d4d8dc",border:"2px solid #20262a",zIndex:5}}/>)}
         {police.map(q=><div key={"police"+q.id} style={{position:"absolute",left:q.x-29,top:q.y-14,width:58,height:28,borderRadius:6,background:"#f2f2f2",border:"2px solid #15191c",transform:"rotate("+q.angle+"rad)",zIndex:8}}><div style={{height:8,background:"#2563eb"}}/><div style={{position:"absolute",right:0,top:0,width:29,height:8,background:"#ef4444"}}/><div style={{position:"absolute",left:8,top:13,width:42,height:6,background:"#20262a",borderRadius:2}}/></div>)}
         {cars.map(c=><div key={c.id} style={{position:"absolute",left:c.x-25,top:c.y-12,width:50,height:24,borderRadius:7,background:c.color,border:c.id===car?"3px solid white":"2px solid #14191c",transform:"rotate("+c.angle+"rad)",zIndex:6,boxShadow:"0 4px 10px #0006"}}><div style={{position:"absolute",left:10,top:4,width:26,height:15,background:"#20282c",borderRadius:3}}/></div>)}
-        {mission==="active"&&<div style={{position:"absolute",left:target.x-48,top:target.y-48,width:96,height:96,border:"3px solid #ffd84d",borderRadius:"50%",boxShadow:"0 0 35px #ffd84d55",zIndex:4}}/>}
+        {mission==="active"&&<div style={{position:"absolute",left:missionTarget.x-48,top:missionTarget.y-48,width:96,height:96,border:"3px solid #ffd84d",borderRadius:"50%",boxShadow:"0 0 35px #ffd84d55",zIndex:4}}/>}
         <div style={{position:"absolute",left:p.x-12,top:p.y-16,width:24,height:32,borderRadius:8,background:car!==null?"#f1f1f1":"#46b6ff",border:"3px solid #101417",boxShadow:"0 0 18px #46b6ff66",zIndex:10}}/>
         {weather==="rain"&&<div style={{position:"absolute",inset:0,pointerEvents:"none",backgroundImage:"repeating-linear-gradient(105deg,transparent 0,transparent 14px,#9ed8ff33 15px,#9ed8ff33 16px)",opacity:.75}}/>}
       </div>
 
-      <aside style={{position:"absolute",left:18,top:18,width:300,padding:18,background:"#090d10dd",border:"1px solid #344149",borderRadius:12,backdropFilter:"blur(10px)"}}>
-        <div style={{fontWeight:900,fontSize:17}}>NIGHT RUN</div>
-        <div style={{marginTop:8,color:"#a5afb5",fontSize:13,lineHeight:1.5}}>{msg}</div>
-        <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #293239",color:"#7f8b93",fontSize:11,lineHeight:1.8}}>WASD / ARROWS — MOVE<br/>E — ENTER / EXIT CAR<br/>M — START MISSION<br/>R — TOGGLE RAIN</div>
+      <aside style={{position:"absolute",left:18,top:18,width:315,padding:18,background:"#090d10dd",border:"1px solid #344149",borderRadius:12,backdropFilter:"blur(10px)"}}>
+        <div style={{fontWeight:900,fontSize:17}}>EXTRA CITY JOBS</div>
+        <div style={{marginTop:8,color:"#a5afb5",fontSize:13,lineHeight:1.5}}>{missionText}</div>
+        <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #293239",color:"#7f8b93",fontSize:11,lineHeight:1.8}}>WASD / ARROWS — MOVE<br/>E — ENTER / EXIT CAR<br/>M — NEXT JOB<br/>R — TOGGLE RAIN<br/>G — GARAGE<br/>F — CITY STORE</div>
+        <div style={{marginTop:12,color:"#74dca0",fontSize:11}}>GARAGE: {garage?"OWNED":"$500 • UNOWNED"}</div>
       </aside>
 
       <div style={{position:"absolute",right:18,top:18,padding:"10px 13px",background:"#090d10dd",border:"1px solid #344149",borderRadius:10,fontSize:11,color:"#b8c1c6"}}>
@@ -157,11 +201,13 @@ export default function ExtraCity() {
           <div style={{position:"absolute",left:0,top:"41%",width:"100%",height:"9%",background:"#252b2f"}}/>
           <div style={{position:"absolute",left:(p.x/W*100)+"%",top:(p.y/H*100)+"%",width:7,height:7,background:"#46b6ff",borderRadius:"50%",transform:"translate(-50%,-50%)"}}/>
           {police.map(q=><div key={q.id} style={{position:"absolute",left:(q.x/W*100)+"%",top:(q.y/H*100)+"%",width:5,height:5,background:"#ff4d4d",borderRadius:"50%",transform:"translate(-50%,-50%)"}}/>)}
-          {mission==="active"&&<div style={{position:"absolute",left:(target.x/W*100)+"%",top:(target.y/H*100)+"%",width:7,height:7,background:"#ffd84d",borderRadius:"50%",transform:"translate(-50%,-50%)"}}/>}
+          {mission==="active"&&<div style={{position:"absolute",left:(missionTarget.x/W*100)+"%",top:(missionTarget.y/H*100)+"%",width:7,height:7,background:"#ffd84d",borderRadius:"50%",transform:"translate(-50%,-50%)"}}/>}
         </div>
         <div style={{position:"absolute",left:10,bottom:7,fontSize:9,color:"#8d9aa4",letterSpacing:1}}>CITY MAP</div>
       </div>
-      <div style={{position:"absolute",left:"50%",bottom:20,transform:"translateX(-50%)",padding:"10px 16px",background:"#090d10ee",border:"1px solid #344149",borderRadius:999,fontSize:12,color:"#d9e0e4"}}>{msg}</div>
+
+      <div style={{position:"absolute",left:18,bottom:18,padding:"10px 14px",background:"#090d10ee",border:"1px solid #344149",borderRadius:10,fontSize:11,color:"#d9e0e4",maxWidth:430}}>{toast}</div>
+      <div style={{position:"absolute",left:"50%",bottom:20,transform:"translateX(-50%)",padding:"10px 16px",background:"#090d10ee",border:"1px solid #344149",borderRadius:999,fontSize:12,color:"#d9e0e4"}}>{missionText}</div>
     </section>
   </main>;
 }
