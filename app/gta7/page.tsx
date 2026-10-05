@@ -62,14 +62,16 @@ export default function ExtraCity(){
   const [wanted,setWanted]=useState(0);
   const [job,setJob]=useState<Job|null>(null);
   const [message,setMessage]=useState("Welcome to EXTRA CITY.");
+  const [district,setDistrict]=useState("DOWNTOWN");
   const [time,setTime]=useState(18.5);
   const [rain,setRain]=useState(false);
   const [inCar,setInCar]=useState(false);
-  const inCarRef=useRef(false), jobRef=useRef<Job|null>(null), rainRef=useRef(false), wantedRef=useRef(0);
+  const inCarRef=useRef(false), jobRef=useRef<Job|null>(null), rainRef=useRef(false), wantedRef=useRef(0), districtRef=useRef("DOWNTOWN");
   useEffect(()=>{inCarRef.current=inCar;},[inCar]);
   useEffect(()=>{jobRef.current=job;},[job]);
   useEffect(()=>{rainRef.current=rain;},[rain]);
   useEffect(()=>{wantedRef.current=wanted;},[wanted]);
+  useEffect(()=>{districtRef.current=district;},[district]);
 
   useEffect(()=>{
     const root=mount.current;
@@ -205,6 +207,7 @@ export default function ExtraCity(){
       const raining=rainRef.current;
       const currentWanted=wantedRef.current;
       const speed=driving?13:6.5;
+      if(driving && playerCar){playerCar.position.y=.05;}
       const upKey=keys.has("w")||keys.has("arrowup"), downKey=keys.has("s")||keys.has("arrowdown");
       const left=keys.has("a")||keys.has("arrowleft"), right=keys.has("d")||keys.has("arrowright");
       const active=driving&&playerCar?playerCar:player;
@@ -257,6 +260,9 @@ export default function ExtraCity(){
       camera.lookAt(active.position.x,active.position.y+1.1,active.position.z-3);
 
       const gameHour=(18.5+elapsed*.22)%24;
+      const px=active.position.x,pz=active.position.z;
+      const nextDistrict=px>65?"INDUSTRIAL":px<-65?"OLD MARKET":pz>105?"SUNSET HEIGHTS":"DOWNTOWN";
+      if(nextDistrict!==districtRef.current){districtRef.current=nextDistrict;setDistrict(nextDistrict);setMessage(nextDistrict+" district.");}
       const night=gameHour>=19||gameHour<6;
       const sky=night?"#08101a":"#9eb9cc";
       (scene.background as THREE.Color).lerp(new THREE.Color(sky),.025); scene.fog?.color.lerp(new THREE.Color(sky),.025);
@@ -302,7 +308,7 @@ export default function ExtraCity(){
         <div style={{marginTop:8,color:"#aeb8be",fontSize:13,lineHeight:1.5}}>{job?jobs[job].name+" — follow the yellow marker.":"Press M to start a job."}</div>
         <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #29343b",color:"#8c99a1",fontSize:11,lineHeight:1.9}}>WASD / ARROWS — MOVE / DRIVE<br/>E — ENTER / EXIT CAR<br/>M — START JOB<br/>R — TOGGLE RAIN<br/>CAMERA — THIRD PERSON</div>
       </aside>
-      <div style={{position:"absolute",right:18,top:18,padding:"10px 14px",background:"#070b0edb",border:"1px solid #33414a",borderRadius:10,fontSize:11,zIndex:5}}>{time>=19||time<6?"NIGHT":"DAY"} • {rain?"RAIN":"CLEAR"} • {Math.floor(time).toString().padStart(2,"0")}:{Math.floor((time%1)*60).toString().padStart(2,"0")}</div>
+      <div style={{position:"absolute",right:18,top:18,padding:"10px 14px",background:"#070b0edb",border:"1px solid #33414a",borderRadius:10,fontSize:11,zIndex:5}}>{district} • {time>=19||time<6?"NIGHT":"DAY"} • {rain?"RAIN":"CLEAR"} • {Math.floor(time).toString().padStart(2,"0")}:{Math.floor((time%1)*60).toString().padStart(2,"0")}</div>
       <div style={{position:"absolute",left:18,bottom:18,padding:"10px 14px",background:"#070b0eee",border:"1px solid #33414a",borderRadius:10,fontSize:12,zIndex:5}}>{message}</div>
       <div style={{position:"absolute",right:18,bottom:18,padding:"10px 14px",background:"#070b0eee",border:"1px solid #33414a",borderRadius:10,color:"#aeb8be",fontSize:11,zIndex:5}}>DOWNTOWN • OLD MARKET • INDUSTRIAL • SUNSET HEIGHTS</div>
     </section>
