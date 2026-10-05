@@ -310,7 +310,7 @@ export default function Home() {
       c.visible = inCar;
 
       scene.traverse((obj) => {
-        const user = obj.userData as any;
+        const user = obj.userData as { traffic?: boolean; walkSpeed?: number; baseX?: number; walkPhase?: number; speed?: number; axis?: number; direction?: number };
         if (user.traffic) {
           const car = obj as THREE.Group;
           const d = user.speed * dt * user.direction;
