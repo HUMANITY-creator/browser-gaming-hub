@@ -1,228 +1,251 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
 
-const W = 3000, H = 2000;
-const clamp = (n:number,a:number,b:number) => Math.max(a, Math.min(b,n));
-const d = (a:{x:number,y:number}, b:{x:number,y:number}) => Math.hypot(a.x-b.x,a.y-b.y);
+type Job = "delivery" | "escape" | "checkpoint";
 
-type Car = {id:number,x:number,y:number,angle:number,color:string,speed:number};
-type Ped = {id:number,x:number,y:number,tx:number,ty:number,state:"walk"|"panic"};
-type Cop = {id:number,x:number,y:number,angle:number};
-type MissionKind = "delivery"|"escape"|"checkpoint";
+const jobs:Record<Job,{name:string;reward:number;target:THREE.Vector3}> = {
+  delivery:{name:"NIGHT DELIVERY",reward:1500,target:new THREE.Vector3(70,0,-90)},
+  escape:{name:"CLEAN GETAWAY",reward:2800,target:new THREE.Vector3(-55,0,35)},
+  checkpoint:{name:"CITY CHECKPOINT",reward:2200,target:new THREE.Vector3(95,0,65)}
+};
 
-type HumanProps = { tone:string; shirt:string; pants:string; hair:string; panic?:boolean; scale?:number };
-const Human = ({tone,shirt,pants,hair,panic=false,scale=1}:HumanProps) => (
-  <div style={{position:"relative",width:34*scale,height:52*scale,filter:"drop-shadow(0 5px 5px #0008)"}}>
-    <div style={{position:"absolute",left:11*scale,top:0,width:13*scale,height:13*scale,borderRadius:"50%",background:tone,border:"1px solid #16191b",zIndex:3}}/>
-    <div style={{position:"absolute",left:10*scale,top:1*scale,width:15*scale,height:7*scale,borderRadius:"9px 9px 4px 4px",background:hair,zIndex:4}}/>
-    <div style={{position:"absolute",left:10*scale,top:12*scale,width:15*scale,height:21*scale,borderRadius:6*scale,background:panic?"#ff9d38":shirt,border:"1px solid #171a1d",zIndex:2}}/>
-    <div style={{position:"absolute",left:4*scale,top:14*scale,width:7*scale,height:20*scale,borderRadius:4*scale,background:shirt,transform:panic?"rotate(-25deg)":"rotate(8deg)",transformOrigin:"top center",zIndex:1}}/>
-    <div style={{position:"absolute",left:24*scale,top:14*scale,width:7*scale,height:20*scale,borderRadius:4*scale,background:shirt,transform:panic?"rotate(25deg)":"rotate(-8deg)",transformOrigin:"top center",zIndex:1}}/>
-    <div style={{position:"absolute",left:10*scale,top:31*scale,width:7*scale,height:19*scale,borderRadius:4*scale,background:pants,transform:panic?"rotate(-8deg)":"rotate(3deg)",transformOrigin:"top center",zIndex:1}}/>
-    <div style={{position:"absolute",left:18*scale,top:31*scale,width:7*scale,height:19*scale,borderRadius:4*scale,background:pants,transform:panic?"rotate(8deg)":"rotate(-3deg)",transformOrigin:"top center",zIndex:1}}/>
-    <div style={{position:"absolute",left:8*scale,top:47*scale,width:9*scale,height:4*scale,borderRadius:3*scale,background:"#17191b"}}/>
-    <div style={{position:"absolute",left:18*scale,top:47*scale,width:9*scale,height:4*scale,borderRadius:3*scale,background:"#17191b"}}/>
-  </div>
-);
+function makeHuman(palette:number, panic=false){
+  const g=new THREE.Group();
+  const tones=["#8b5a3c","#b87550","#d39b73","#6c4735"];
+  const shirts=["#285f9e","#9d3f42","#c18b2e","#3f875f","#744da1","#d06b3d"];
+  const pants=["#1f2a36","#343434","#293c2d","#4b392b"];
+  const skin=new THREE.MeshStandardMaterial({color:tones[palette%tones.length],roughness:.85});
+  const shirt=new THREE.MeshStandardMaterial({color:panic?"#ff8a2a":shirts[palette%shirts.length],roughness:.8});
+  const trouser=new THREE.MeshStandardMaterial({color:pants[palette%pants.length],roughness:.9});
+  const hair=new THREE.MeshStandardMaterial({color:["#161616","#3b2417","#654126","#252525"][palette%4],roughness:1});
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.23,12,10),skin); head.position.y=1.55;
+  const hairCap=new THREE.Mesh(new THREE.SphereGeometry(.235,12,7,0,Math.PI*2,0,Math.PI*.55),hair); hairCap.position.y=1.62;
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.25,.58,5,8),shirt); body.position.y=1.05;
+  const lArm=new THREE.Mesh(new THREE.CapsuleGeometry(.075,.52,4,6),shirt); lArm.position.set(-.31,1.08,0); lArm.rotation.z=.08;
+  const rArm=lArm.clone(); rArm.position.x=.31; rArm.rotation.z=-.08;
+  const lLeg=new THREE.Mesh(new THREE.CapsuleGeometry(.09,.62,4,6),trouser); lLeg.position.set(-.13,.45,0);
+  const rLeg=lLeg.clone(); rLeg.position.x=.13;
+  const shoeMat=new THREE.MeshStandardMaterial({color:"#16181a",roughness:1});
+  const lShoe=new THREE.Mesh(new THREE.BoxGeometry(.16,.09,.3),shoeMat); lShoe.position.set(-.13,.08,.06);
+  const rShoe=lShoe.clone(); rShoe.position.x=.13;
+  g.add(head,hairCap,body,lArm,rArm,lLeg,rLeg,lShoe,rShoe);
+  return g;
+}
 
-export default function ExtraCity() {
-  const [p,setP] = useState({x:1500,y:1050});
-  const [cars,setCars] = useState<Car[]>(() => Array.from({length:18},(_,i)=>({
-    id:i,x:300+((i*431)%2400),y:260+((i*277)%1450),angle:i%2?0:Math.PI/2,
-    color:["#e85d5d","#4d8df7","#e8c34d","#63c58a","#a77bf3","#f28b5b"][i%6],speed:45+(i%4)*18
-  })));
-  const [peds,setPeds] = useState<Ped[]>(() => Array.from({length:34},(_,i)=>({
-    id:i,x:180+((i*173)%2640),y:180+((i*317)%1640),
-    tx:180+(((i*173)+500)%2640),ty:180+(((i*317)+700)%1640),state:"walk"
-  })));
-  const [wanted,setWanted] = useState(0);
-  const [cash,setCash] = useState(1250);
-  const [mission,setMission] = useState<"idle"|"active"|"done">("idle");
-  const [missionKind,setMissionKind] = useState<MissionKind>("delivery");
-  const [missionStep,setMissionStep] = useState(0);
-  const [car,setCar] = useState<number|null>(null);
-  const [police,setPolice] = useState<Cop[]>([]);
-  const [time,setTime] = useState(21.5);
-  const [weather,setWeather] = useState<"clear"|"rain">("clear");
-  const [garage,setGarage] = useState(0);
-  const [toast,setToast] = useState("Welcome to EXTRA CITY.");
-  const keys = useRef(new Set<string>());
-  const target = useMemo(()=>({x:2350,y:620}),[]);
-  const garageSpot = useMemo(()=>({x:1330,y:910}),[]);
-  const shopSpot = useMemo(()=>({x:850,y:880}),[]);
-  const checkpoint = useMemo(()=>({x:2220,y:1510}),[]);
-  const missionTarget = missionKind==="delivery" ? target : missionKind==="escape" ? garageSpot : checkpoint;
-  const missionText =
-    mission==="idle" ? "Press M to start a job." :
-    mission==="active" ? missionKind==="delivery" ? "Deliver the package to the yellow marker." :
-    missionKind==="escape" ? "Lose the cops, then reach the garage." :
-    "Hit the checkpoint, then return to the blue garage." :
-    "JOB COMPLETE. Pick another route.";
+function makeCar(color:string, police=false){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.7,.48,3.5),new THREE.MeshStandardMaterial({color,metalness:.25,roughness:.65}));
+  body.position.y=.48; g.add(body);
+  const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.35,.52,1.7),new THREE.MeshStandardMaterial({color:"#182126",metalness:.1,roughness:.25,transparent:true,opacity:.9}));
+  cabin.position.set(0,.82,-.05); g.add(cabin);
+  const wheelMat=new THREE.MeshStandardMaterial({color:"#111315",roughness:1});
+  for(const x of [-.82,.82]) for(const z of [-1.15,1.15]){
+    const w=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,.18,12),wheelMat);
+    w.rotation.z=Math.PI/2; w.position.set(x,.3,z); g.add(w);
+  }
+  if(police){
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(.72,.12,.2),new THREE.MeshStandardMaterial({color:"#eeeeee",emissive:"#222222"}));
+    bar.position.y=1.14; g.add(bar);
+    const red=new THREE.Mesh(new THREE.BoxGeometry(.34,.13,.22),new THREE.MeshStandardMaterial({color:"#e22",emissive:"#500"}));
+    red.position.set(-.18,1.2,0); g.add(red);
+    const blue=red.clone(); blue.material=new THREE.MeshStandardMaterial({color:"#26f",emissive:"#005"}); blue.position.x=.18; g.add(blue);
+  }
+  return g;
+}
 
-  useEffect(()=>{
-    try {
-      const saved=localStorage.getItem("extra-city-save");
-      if(saved){const s=JSON.parse(saved); if(typeof s.cash==="number")setCash(s.cash); if(typeof s.garage==="number")setGarage(s.garage);}
-    } catch {}
-  },[]);
+export default function ExtraCity(){
+  const mount=useRef<HTMLDivElement>(null);
+  const [cash,setCash]=useState(1250);
+  const [wanted,setWanted]=useState(0);
+  const [job,setJob]=useState<Job|null>(null);
+  const [message,setMessage]=useState("Welcome to EXTRA CITY.");
+  const [time,setTime]=useState(18.5);
+  const [rain,setRain]=useState(false);
+  const [inCar,setInCar]=useState(false);
 
   useEffect(()=>{
-    localStorage.setItem("extra-city-save",JSON.stringify({cash,garage}));
-  },[cash,garage]);
+    const root=mount.current;
+    if(!root) return;
 
-  useEffect(()=>{
+    const scene=new THREE.Scene();
+    scene.background=new THREE.Color("#9eb9cc");
+    scene.fog=new THREE.Fog("#9eb9cc",65,250);
+
+    const camera=new THREE.PerspectiveCamera(62,root.clientWidth/root.clientHeight,.1,500);
+    camera.position.set(0,6,9);
+
+    const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.75));
+    renderer.setSize(root.clientWidth,root.clientHeight);
+    renderer.shadowMap.enabled=true;
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace=THREE.SRGBColorSpace;
+    root.appendChild(renderer.domElement);
+
+    const hemi=new THREE.HemisphereLight("#cde8ff","#27351f",1.8); scene.add(hemi);
+    const sun=new THREE.DirectionalLight("#fff1d0",3.2); sun.position.set(60,100,30); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); scene.add(sun);
+
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(420,320),new THREE.MeshStandardMaterial({color:"#38533d",roughness:1}));
+    ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+
+    const roadMat=new THREE.MeshStandardMaterial({color:"#292d31",roughness:.95});
+    const road1=new THREE.Mesh(new THREE.BoxGeometry(420,.08,28),roadMat); road1.position.y=.02; scene.add(road1);
+    const road2=new THREE.Mesh(new THREE.BoxGeometry(28,.08,320),roadMat); road2.position.y=.03; scene.add(road2);
+    const road3=new THREE.Mesh(new THREE.BoxGeometry(420,.08,20),roadMat); road3.position.set(0,.04,-82); scene.add(road3);
+    const laneMat=new THREE.MeshStandardMaterial({color:"#d7bd62",roughness:1});
+    for(let x=-195;x<195;x+=12){const m=new THREE.Mesh(new THREE.BoxGeometry(6,.02,.12),laneMat);m.position.set(x,.09,0);scene.add(m);}
+    for(let z=-145;z<145;z+=12){const m=new THREE.Mesh(new THREE.BoxGeometry(.12,.02,6),laneMat);m.position.set(0,.09,z);scene.add(m);}
+
+    const buildingMats=["#555b60","#66554c","#4d6259","#6a6460","#4c5663"];
+    for(let i=0;i<58;i++){
+      const x=((i*37)%390)-195, z=((i*61)%285)-142;
+      if(Math.abs(x)<22 || Math.abs(z)<17 || (Math.abs(z+82)<13)) continue;
+      const h=4+(i%7)*1.5, w=5+(i%4)*1.8, dep=5+(i%3)*2;
+      const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,dep),new THREE.MeshStandardMaterial({color:buildingMats[i%buildingMats.length],roughness:.9}));
+      b.position.set(x,h/2,z); b.castShadow=true; b.receiveShadow=true; scene.add(b);
+      if(i%4===0){
+        const sign=new THREE.Mesh(new THREE.BoxGeometry(Math.min(w*.65,3),.45,.08),new THREE.MeshStandardMaterial({color:"#d7a93b",emissive:"#332000"}));
+        sign.position.set(x,h*.65,z-dep/2-.05); scene.add(sign);
+      }
+    }
+
+    const player=makeHuman(2); player.scale.setScalar(1.12); player.position.set(0,0,6); player.castShadow=true; scene.add(player);
+    let playerCar:THREE.Group|null=null;
+    const traffic:THREE.Group[]=[];
+    const trafficColors=["#d44b4b","#3f78c9","#d5b23f","#4b9b6a","#8255a9","#d97745"];
+    for(let i=0;i<18;i++){
+      const c=makeCar(trafficColors[i%trafficColors.length]); c.position.set(((i*31)%360)-180,.05,((i*47)%250)-125); c.rotation.y=i%2?Math.PI/2:0; c.castShadow=true; scene.add(c); traffic.push(c);
+    }
+
+    const people:THREE.Group[]=[];
+    for(let i=0;i<46;i++){
+      const h=makeHuman(i%12); h.position.set(((i*29)%370)-185,0,((i*53)%270)-135); h.scale.setScalar(.9+(i%4)*.04); h.castShadow=true; scene.add(h); people.push(h);
+    }
+
+    const cops:THREE.Group[]=[];
+    const missionMarker=new THREE.Mesh(new THREE.TorusGeometry(2.1,.12,8,40),new THREE.MeshStandardMaterial({color:"#ffd84d",emissive:"#6b4e00"}));
+    missionMarker.rotation.x=-Math.PI/2; missionMarker.position.y=.12; missionMarker.visible=false; scene.add(missionMarker);
+
+    const keys=new Set<string>();
     const down=(e:KeyboardEvent)=>{
-      const k=e.key.toLowerCase(); keys.current.add(k);
-      if(["w","a","s","d","e","m","r","g","f","arrowup","arrowdown","arrowleft","arrowright"].includes(k)) e.preventDefault();
-      if(k==="m" && mission!=="active"){
-        const next:MissionKind=missionKind==="delivery"?"escape":missionKind==="escape"?"checkpoint":"delivery";
-        setMissionKind(next); setMission("active"); setMissionStep(0);
-        if(next==="escape") setWanted(2); else setWanted(1);
-        setToast(next==="delivery"?"JOB: NIGHT DELIVERY":next==="escape"?"JOB: CLEAN GETAWAY":"JOB: CITY CHECKPOINT");
-      }
-      if(k==="r") setWeather(w=>w==="clear"?"rain":"clear");
-      if(k==="g" && d(p,garageSpot)<150){
-        if(garage===0 && cash>=500){setGarage(1);setCash(v=>v-500);setToast("Garage purchased. Vehicle storage unlocked.");} else if(garage===0){setToast("You need $500 for the garage.");}
-        else {setToast("Garage: your ride is ready.");}
-      }
-      if(k==="f" && d(p,shopSpot)<140){
-        if(cash>=250){setCash(v=>v-250);setToast("City Store: repair kit purchased.");}
-        else setToast("Not enough cash.");
-      }
+      const k=e.key.toLowerCase(); keys.add(k);
+      if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","e","m","r"].includes(k)) e.preventDefault();
       if(k==="e"){
-        if(car!==null){ setCar(null); setToast("On foot."); return; }
-        setCars(cs=>{
-          let best=-1,bd=90;
-          cs.forEach(c=>{const z=d(p,c);if(z<bd){bd=z;best=c.id;}});
-          if(best>=0){setCar(best);setWanted(w=>Math.min(5,Math.max(1,w+1)));setToast("Vehicle acquired. Wanted level increased.");}
-          return cs;
+        setInCar(v=>{
+          if(v){ if(playerCar){player.position.copy(playerCar.position);player.visible=true;scene.remove(playerCar);playerCar=null;} setMessage("On foot."); return false; }
+          let nearest:THREE.Group|null=null,best=4;
+          for(const c of traffic){const z=c.position.distanceTo(player.position);if(z<best){best=z;nearest=c;}}
+          if(nearest){playerCar=nearest;player.visible=false;setWanted(v=>Math.min(5,Math.max(1,v+1)));setMessage("Vehicle acquired. Police are watching.");return true;}
+          setMessage("Get closer to a car."); return false;
         });
       }
-    };
-    const up=(e:KeyboardEvent)=>keys.current.delete(e.key.toLowerCase());
-    addEventListener("keydown",down); addEventListener("keyup",up);
-    return()=>{removeEventListener("keydown",down);removeEventListener("keyup",up)};
-  },[car,mission,missionKind,p,garage,cash,garageSpot,shopSpot]);
-
-  useEffect(()=>{
-    let raf=0,last=performance.now(),accel=0,angle=0;
-    const loop=(now:number)=>{
-      const dt=Math.min(.035,(now-last)/1000); last=now;
-      const k=keys.current;
-      const up=k.has("w")||k.has("arrowup"), down=k.has("s")||k.has("arrowdown");
-      const left=k.has("a")||k.has("arrowleft"), right=k.has("d")||k.has("arrowright");
-
-      if(car!==null){
-        accel += (up?520:0) - (down?700:0) - accel*1.8;
-        accel=clamp(accel,-220,520);
-        if(left) angle-=dt*(1.5+Math.abs(accel)/300);
-        if(right) angle+=dt*(1.5+Math.abs(accel)/300);
-        setP(old=>({x:clamp(old.x+Math.cos(angle)*accel*dt,70,W-70),y:clamp(old.y+Math.sin(angle)*accel*dt,70,H-70)}));
-        setCars(cs=>cs.map(c=>c.id===car?{...c,x:p.x,y:p.y,angle,speed:Math.abs(accel)}:c));
-      } else {
-        const vx=(right?1:0)-(left?1:0), vy=(down?1:0)-(up?1:0), len=Math.hypot(vx,vy)||1;
-        setP(old=>({x:clamp(old.x+vx/len*250*dt,60,W-60),y:clamp(old.y+vy/len*250*dt,60,H-60)}));
+      if(k==="m" && !job){
+        setJob(prev=>prev?prev:"delivery");
+        setMessage("JOB: NIGHT DELIVERY — reach the yellow marker.");
+        missionMarker.visible=true; missionMarker.position.copy(jobs.delivery.target);
       }
+      if(k==="r"){setRain(v=>!v);setMessage(rain?"Rain stopped.":"Rain started.");}
+    };
+    const up=(e:KeyboardEvent)=>keys.delete(e.key.toLowerCase());
+    window.addEventListener("keydown",down); window.addEventListener("keyup",up);
 
-      setCars(cs=>cs.map(c=>c.id===car?c:{...c,x:clamp(c.x+Math.cos(c.angle)*c.speed*dt,60,W-60),y:clamp(c.y+Math.sin(c.angle)*c.speed*dt,60,H-60)}));
+    let last=performance.now(),raf=0,elapsed=0;
+    const clock=new THREE.Clock();
+    const animate=()=>{
+      raf=requestAnimationFrame(animate);
+      const dt=Math.min(clock.getDelta(),.035); elapsed+=dt;
+      const speed=inCar?13:6.5;
+      const upKey=keys.has("w")||keys.has("arrowup"), downKey=keys.has("s")||keys.has("arrowdown");
+      const left=keys.has("a")||keys.has("arrowleft"), right=keys.has("d")||keys.has("arrowright");
+      const active=inCar&&playerCar?playerCar:player;
+      const forward=new THREE.Vector3(0,0,-1).applyQuaternion(active.quaternion);
+      if(upKey) active.position.addScaledVector(forward,speed*dt);
+      if(downKey) active.position.addScaledVector(forward,-speed*.62*dt);
+      if(left) active.rotation.y+=dt*(inCar?1.8:2.6);
+      if(right) active.rotation.y-=dt*(inCar?1.8:2.6);
+      active.position.x=THREE.MathUtils.clamp(active.position.x,-198,198);
+      active.position.z=THREE.MathUtils.clamp(active.position.z,-150,150);
 
-      setPeds(ps=>ps.map(n=>{
-        const panic=d(n,p)<170 || (wanted>0 && d(n,p)<250);
-        const tx=panic?n.x+(n.x-p.x)*2:n.tx, ty=panic?n.y+(n.y-p.y)*2:n.ty;
-        const dx=tx-n.x,dy=ty-n.y,len=Math.hypot(dx,dy)||1;
-        const nx=n.x+dx/len*(panic?125:42)*dt, ny=n.y+dy/len*(panic?125:42)*dt;
-        if(!panic && d({x:nx,y:ny},{x:n.tx,y:n.ty})<30){n.tx=180+((n.id*571+now/20)%2640);n.ty=180+((n.id*283+now/30)%1640);}
-        return {...n,x:clamp(nx,80,W-80),y:clamp(ny,80,H-80),state:panic?"panic":"walk"};
-      }));
+      for(let i=0;i<traffic.length;i++){
+        const c=traffic[i];
+        c.position.z += (i%2?1:-1)*(5+(i%4))*dt;
+        if(c.position.z>155)c.position.z=-155;
+        if(c.position.z<-155)c.position.z=155;
+      }
+      for(const [i,h] of people.entries()){
+        h.position.x += Math.sin(elapsed*.35+i)*.35*dt;
+        h.position.z += Math.cos(elapsed*.3+i*.7)*.3*dt;
+        if(wanted>0 && h.position.distanceTo(active.position)<12){
+          h.position.x += (h.position.x-active.position.x)*dt*2.4;
+          h.position.z += (h.position.z-active.position.z)*dt*2.4;
+        }
+      }
 
       if(wanted>0){
-        setPolice(ps=>{
-          const count=wanted>=4?4:wanted>=2?2:1;
-          const next=Array.from({length:count},(_,i)=>ps[i]||{id:i,x:p.x+420+i*90,y:p.y-320-i*70,angle:0});
-          return next.map(q=>{
-            const dx=p.x-q.x,dy=p.y-q.y,len=Math.hypot(dx,dy)||1;
-            return {...q,x:q.x+dx/len*(135+wanted*22)*dt,y:q.y+dy/len*(135+wanted*22)*dt,angle:Math.atan2(dy,dx)};
-          });
-        });
-      } else setPolice([]);
+        const needed=wanted>=4?4:wanted>=2?2:1;
+        while(cops.length<needed){const c=makeCar("#f1f1f1",true);c.position.set(active.position.x+18+cops.length*8,.05,active.position.z+18);scene.add(c);cops.push(c);}
+        while(cops.length>needed){const c=cops.pop();if(c)scene.remove(c);}
+        for(const c of cops){
+          const dx=active.position.x-c.position.x,dz=active.position.z-c.position.z,len=Math.hypot(dx,dz)||1;
+          c.position.x+=(dx/len)*(7+wanted*1.8)*dt;c.position.z+=(dz/len)*(7+wanted*1.8)*dt;c.rotation.y=Math.atan2(dx,dz);
+          if(c.position.distanceTo(active.position)<2.5){setWanted(Math.min(5,wanted+1));}
+        }
+      } else while(cops.length){const c=cops.pop();if(c)scene.remove(c);}
 
-      setTime(t=>(t+dt*0.35)%24);
+      const desired=new THREE.Vector3(active.position.x,active.position.y+5.2,active.position.z+9.5);
+      camera.position.lerp(desired,1-Math.pow(.0001,dt));
+      camera.lookAt(active.position.x,active.position.y+1.1,active.position.z-3);
 
-      if(mission==="active"){
-        if(missionKind==="checkpoint" && missionStep===0 && d(p,checkpoint)<120){setMissionStep(1);setToast("Checkpoint reached. Return to the garage.");}
-        else if(missionKind==="checkpoint" && missionStep===1 && d(p,garageSpot)<130){setMission("done");setCash(v=>v+2200);setWanted(0);setToast("CITY CHECKPOINT complete. +$2,200");}
-        else if(missionKind==="delivery" && d(p,target)<115){setMission("done");setCash(v=>v+1500);setWanted(0);setToast("NIGHT DELIVERY complete. +$1,500");}
-        else if(missionKind==="escape" && wanted===0 && d(p,garageSpot)<130){setMission("done");setCash(v=>v+2800);setToast("CLEAN GETAWAY complete. +$2,800");}
+      const night=time>=19||time<6;
+      const sky=night?"#08101a":"#9eb9cc";
+      scene.background.lerp(new THREE.Color(sky),.025); scene.fog?.color.lerp(new THREE.Color(sky),.025);
+      hemi.intensity=night?0.55:1.8; sun.intensity=night?.45:3.2;
+      setTime(v=>(v+dt*.22)%24);
+
+      if(rain){
+        const rainCount=110;
+        const group=scene.getObjectByName("rain") as THREE.Group|null;
+        const rg=group||new THREE.Group();
+        rg.name="rain";
+        if(!group){for(let i=0;i<rainCount;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.015,.45,.015),new THREE.MeshBasicMaterial({color:"#9ed8ff"}));m.position.set((Math.random()-.5)*220,Math.random()*35+3,(Math.random()-.5)*170);rg.add(m);}scene.add(rg);}
+        rg.children.forEach(m=>{m.position.y-=28*dt;if(m.position.y<1)m.position.y=35;});
+      } else {const rg=scene.getObjectByName("rain");if(rg)scene.remove(rg);}
+
+      if(job){
+        const target=jobs[job].target;
+        missionMarker.visible=true;missionMarker.position.copy(target);missionMarker.position.y=.12;
+        if(active.position.distanceTo(target)<3){
+          if(job==="checkpoint"){setMessage("Checkpoint reached — head back to the start.");}
+          else {setCash(v=>v+jobs[job].reward);setMessage(job==="delivery"?"NIGHT DELIVERY complete. +$1,500":"CLEAN GETAWAY complete. +$2,800");setJob(null);missionMarker.visible=false;setWanted(0);}
+        }
       }
-      raf=requestAnimationFrame(loop);
+
+      renderer.render(scene,camera);
     };
-    raf=requestAnimationFrame(loop); return()=>cancelAnimationFrame(raf);
-  },[car,mission,missionKind,missionStep,target,checkpoint,garageSpot,p,wanted]);
+    animate();
 
-  useEffect(()=>{
-    if(!wanted)return;
-    const t=setInterval(()=>setWanted(w=>Math.random()<0.18?Math.max(0,w-1):w),4500);
-    return()=>clearInterval(t);
-  },[wanted]);
+    const resize=()=>{if(!root)return;camera.aspect=root.clientWidth/root.clientHeight;camera.updateProjectionMatrix();renderer.setSize(root.clientWidth,root.clientHeight);};
+    window.addEventListener("resize",resize);
+    return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);window.removeEventListener("resize",resize);renderer.dispose();root.removeChild(renderer.domElement);};
+  },[inCar,job,rain,time,wanted]);
 
-  useEffect(()=>{
-    if(mission!=="done") return;
-    const t=setTimeout(()=>setMission("idle"),2200);
-    return()=>clearTimeout(t);
-  },[mission]);
-
-  const camX=clamp(p.x-650,0,W-1300), camY=clamp(p.y-360,0,H-720);
-  const night=time>=19||time<6;
-  const roads=[
-    {x:0,y:820,w:W,h:170},{x:1180,y:0,w:170,h:H},
-    {x:2160,y:0,w:155,h:H},{x:0,y:1450,w:W,h:130}
-  ];
-  const buildings=Array.from({length:48},(_,i)=>({x:80+((i*313)%2800),y:70+((i*401)%1800),w:120+(i%3)*45,h:85+(i%2)*35}));
-
-  return <main style={{height:"100vh",background:"#080b0e",color:"#f4f7f9",fontFamily:"Arial,sans-serif",overflow:"hidden"}}>
-    <header style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px",background:"#090d10",borderBottom:"1px solid #29343b",position:"relative",zIndex:20}}>
-      <div><div style={{fontWeight:900,letterSpacing:3,fontSize:22}}>EXTRA CITY</div><div style={{fontSize:10,color:"#84919a",letterSpacing:2}}>OPEN-WORLD PROTOTYPE • BUILD 04 • HUMAN NPCs</div></div>
-      <div style={{display:"flex",gap:18,fontWeight:800}}><span style={{color:"#72e3a0"}}>{"$"+cash.toLocaleString()}</span><span style={{color:wanted?"#ff5a5a":"#7d8991",letterSpacing:3}}>{wanted?"★".repeat(wanted):"—"}</span><span style={{color:"#9aa7ae"}}>{weather==="rain"?"RAIN":"CLEAR"}</span></div>
+  return <main style={{height:"100vh",background:"#070b0f",color:"#fff",overflow:"hidden",fontFamily:"Arial,sans-serif"}}>
+    <header style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px",background:"#080c10",borderBottom:"1px solid #27323a",position:"relative",zIndex:10}}>
+      <div><div style={{fontSize:22,fontWeight:900,letterSpacing:4}}>EXTRA CITY</div><div style={{fontSize:10,color:"#87949c",letterSpacing:2}}>3D OPEN-WORLD PROTOTYPE • BUILD 05</div></div>
+      <div style={{display:"flex",gap:22,fontWeight:800}}><span style={{color:"#6ee7a0"}}>{"$"+cash.toLocaleString()}</span><span style={{color:wanted?"#ff5555":"#7e8990"}}>{wanted?"★".repeat(wanted):"NO WANTED"}</span><span>{rain?"RAIN":"CLEAR"}</span></div>
     </header>
-    <section style={{position:"relative",height:"calc(100vh - 64px)",overflow:"hidden",background:night?"#18261d":"#426342"}}>
-      <div style={{position:"absolute",left:-camX,top:-camY,width:W,height:H,background:night?"#1d3425":"#426342",transition:"background .5s"}}>
-        {roads.map((r,i)=><div key={i} style={{position:"absolute",left:r.x,top:r.y,width:r.w,height:r.h,background:night?"#20272b":"#2d3336",boxShadow:"inset 0 0 0 2px #4b5459"}}/>)}
-        {buildings.map((b,i)=><div key={i} style={{position:"absolute",left:b.x,top:b.y,width:b.w,height:b.h,background:i%4===0?"#685149":"#58625b",border:"2px solid #303a35",borderRadius:4,boxShadow:night?"0 0 18px #f4c95d22":"none"}}><div style={{padding:8,fontSize:9,fontWeight:900,color:"#c7ceca"}}>{["MOTEL","AUTO","MARKET","WAREHOUSE"][i%4]}</div></div>)}
-        <div style={{position:"absolute",left:shopSpot.x-45,top:shopSpot.y-45,width:90,height:90,border:"2px solid #7ae3a2",borderRadius:12,background:"#17342699",zIndex:3}}><div style={{padding:8,fontSize:10,fontWeight:900,color:"#a9f0c6"}}>CITY STORE</div></div>
-        <div style={{position:"absolute",left:garageSpot.x-50,top:garageSpot.y-50,width:100,height:100,border:"2px solid #66b8ff",borderRadius:12,background:"#14314b99",zIndex:3}}><div style={{padding:8,fontSize:10,fontWeight:900,color:"#a9d8ff"}}>GARAGE</div></div>
-        {peds.map(n=><div key={"ped"+n.id} style={{position:"absolute",left:n.x-17,top:n.y-25,zIndex:5}}><Human tone={["#8d5b3d","#b87952","#d29b72","#6b4534"][n.id%4]} shirt={["#3f78b5","#b44f4f","#d3a63d","#4c9a72","#8a5fb5"][n.id%5]} pants={["#202b38","#3a3a3a","#273d2c","#51402e"][n.id%4]} hair={["#171717","#3b2417","#6b4528","#242424"][n.id%4]} panic={n.state==="panic"} /></div>)}
-        {police.map(q=><div key={"police"+q.id} style={{position:"absolute",left:q.x-29,top:q.y-14,width:58,height:28,borderRadius:6,background:"#f2f2f2",border:"2px solid #15191c",transform:"rotate("+q.angle+"rad)",zIndex:8}}><div style={{height:8,background:"#2563eb"}}/><div style={{position:"absolute",right:0,top:0,width:29,height:8,background:"#ef4444"}}/><div style={{position:"absolute",left:8,top:13,width:42,height:6,background:"#20262a",borderRadius:2}}/></div>)}
-        {cars.map(c=><div key={c.id} style={{position:"absolute",left:c.x-25,top:c.y-12,width:50,height:24,borderRadius:7,background:c.color,border:c.id===car?"3px solid white":"2px solid #14191c",transform:"rotate("+c.angle+"rad)",zIndex:6,boxShadow:"0 4px 10px #0006"}}><div style={{position:"absolute",left:10,top:4,width:26,height:15,background:"#20282c",borderRadius:3}}/></div>)}
-        {mission==="active"&&<div style={{position:"absolute",left:missionTarget.x-48,top:missionTarget.y-48,width:96,height:96,border:"3px solid #ffd84d",borderRadius:"50%",boxShadow:"0 0 35px #ffd84d55",zIndex:4}}/>}
-        {car===null&&<div style={{position:"absolute",left:p.x-20,top:p.y-27,zIndex:10}}><Human tone="#b97954" shirt="#256fb8" pants="#20252c" hair="#171717" scale={1.12}/></div>}
-        {weather==="rain"&&<div style={{position:"absolute",inset:0,pointerEvents:"none",backgroundImage:"repeating-linear-gradient(105deg,transparent 0,transparent 14px,#9ed8ff33 15px,#9ed8ff33 16px)",opacity:.75}}/>}
-      </div>
-
-      <aside style={{position:"absolute",left:18,top:18,width:315,padding:18,background:"#090d10dd",border:"1px solid #344149",borderRadius:12,backdropFilter:"blur(10px)"}}>
-        <div style={{fontWeight:900,fontSize:17}}>EXTRA CITY JOBS</div>
-        <div style={{marginTop:8,color:"#a5afb5",fontSize:13,lineHeight:1.5}}>{missionText}</div>
-        <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #293239",color:"#7f8b93",fontSize:11,lineHeight:1.8}}>WASD / ARROWS — MOVE<br/>E — ENTER / EXIT CAR<br/>M — NEXT JOB<br/>R — TOGGLE RAIN<br/>G — GARAGE<br/>F — CITY STORE</div>
-        <div style={{marginTop:12,color:"#74dca0",fontSize:11}}>GARAGE: {garage?"OWNED":"$500 • UNOWNED"}</div>
+    <section style={{position:"relative",height:"calc(100vh - 64px)"}}>
+      <div ref={mount} style={{position:"absolute",inset:0}}/>
+      <aside style={{position:"absolute",left:18,top:18,width:310,padding:18,background:"#070b0edb",border:"1px solid #33414a",borderRadius:14,backdropFilter:"blur(12px)",zIndex:5}}>
+        <div style={{fontSize:17,fontWeight:900}}>3D CITY</div>
+        <div style={{marginTop:8,color:"#aeb8be",fontSize:13,lineHeight:1.5}}>{job?jobs[job].name+" — follow the yellow marker.":"Press M to start a job."}</div>
+        <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #29343b",color:"#8c99a1",fontSize:11,lineHeight:1.9}}>WASD / ARROWS — MOVE / DRIVE<br/>E — ENTER / EXIT CAR<br/>M — START JOB<br/>R — TOGGLE RAIN<br/>CAMERA — THIRD PERSON</div>
       </aside>
-
-      <div style={{position:"absolute",right:18,top:18,padding:"10px 13px",background:"#090d10dd",border:"1px solid #344149",borderRadius:10,fontSize:11,color:"#b8c1c6"}}>
-        {night?"NIGHT":"DAY"} • {weather.toUpperCase()} • {Math.floor(time).toString().padStart(2,"0")}:{Math.floor((time%1)*60).toString().padStart(2,"0")}
-      </div>
-
-      <div style={{position:"absolute",right:18,bottom:18,width:190,height:120,background:"#090d10dd",border:"1px solid #344149",borderRadius:10,overflow:"hidden"}}>
-        <div style={{position:"absolute",inset:8,background:night?"#1d3425":"#426342"}}>
-          <div style={{position:"absolute",left:"39%",top:0,width:"6%",height:"100%",background:"#252b2f"}}/>
-          <div style={{position:"absolute",left:0,top:"41%",width:"100%",height:"9%",background:"#252b2f"}}/>
-          <div style={{position:"absolute",left:(p.x/W*100)+"%",top:(p.y/H*100)+"%",width:7,height:7,background:"#46b6ff",borderRadius:"50%",transform:"translate(-50%,-50%)"}}/>
-          {police.map(q=><div key={q.id} style={{position:"absolute",left:(q.x/W*100)+"%",top:(q.y/H*100)+"%",width:5,height:5,background:"#ff4d4d",borderRadius:"50%",transform:"translate(-50%,-50%)"}}/>)}
-          {mission==="active"&&<div style={{position:"absolute",left:(missionTarget.x/W*100)+"%",top:(missionTarget.y/H*100)+"%",width:7,height:7,background:"#ffd84d",borderRadius:"50%",transform:"translate(-50%,-50%)"}}/>}
-        </div>
-        <div style={{position:"absolute",left:10,bottom:7,fontSize:9,color:"#8d9aa4",letterSpacing:1}}>CITY MAP</div>
-      </div>
-
-      <div style={{position:"absolute",left:18,bottom:18,padding:"10px 14px",background:"#090d10ee",border:"1px solid #344149",borderRadius:10,fontSize:11,color:"#d9e0e4",maxWidth:430}}>{toast}</div>
-      <div style={{position:"absolute",left:"50%",bottom:20,transform:"translateX(-50%)",padding:"10px 16px",background:"#090d10ee",border:"1px solid #344149",borderRadius:999,fontSize:12,color:"#d9e0e4"}}>{missionText}</div>
+      <div style={{position:"absolute",right:18,top:18,padding:"10px 14px",background:"#070b0edb",border:"1px solid #33414a",borderRadius:10,fontSize:11,zIndex:5}}>{time>=19||time<6?"NIGHT":"DAY"} • {rain?"RAIN":"CLEAR"} • {Math.floor(time).toString().padStart(2,"0")}:{Math.floor((time%1)*60).toString().padStart(2,"0")}</div>
+      <div style={{position:"absolute",left:18,bottom:18,padding:"10px 14px",background:"#070b0eee",border:"1px solid #33414a",borderRadius:10,fontSize:12,zIndex:5}}>{message}</div>
+      <div style={{position:"absolute",right:18,bottom:18,padding:"10px 14px",background:"#070b0eee",border:"1px solid #33414a",borderRadius:10,color:"#aeb8be",fontSize:11,zIndex:5}}>3D WORLD • HUMAN NPCs • TRAFFIC • POLICE</div>
     </section>
   </main>;
 }
