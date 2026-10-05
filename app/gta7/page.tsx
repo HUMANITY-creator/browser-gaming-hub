@@ -163,8 +163,8 @@ export default function ExtraCity(){
       const forward=new THREE.Vector3(0,0,-1).applyQuaternion(active.quaternion);
       if(upKey) active.position.addScaledVector(forward,speed*dt);
       if(downKey) active.position.addScaledVector(forward,-speed*.62*dt);
-      if(left) active.rotation.y+=dt*(inCar?1.8:2.6);
-      if(right) active.rotation.y-=dt*(inCar?1.8:2.6);
+      if(left) active.rotation.y+=dt*(driving?1.8:2.6);
+      if(right) active.rotation.y-=dt*(driving?1.8:2.6);
       active.position.x=THREE.MathUtils.clamp(active.position.x,-198,198);
       active.position.z=THREE.MathUtils.clamp(active.position.z,-150,150);
 
@@ -177,7 +177,7 @@ export default function ExtraCity(){
       for(const [i,h] of people.entries()){
         h.position.x += Math.sin(elapsed*.35+i)*.35*dt;
         h.position.z += Math.cos(elapsed*.3+i*.7)*.3*dt;
-        if(wanted>0 && h.position.distanceTo(active.position)<12){
+        if(currentWanted>0 && h.position.distanceTo(active.position)<12){
           h.position.x += (h.position.x-active.position.x)*dt*2.4;
           h.position.z += (h.position.z-active.position.z)*dt*2.4;
         }
@@ -189,7 +189,7 @@ export default function ExtraCity(){
         while(cops.length>needed){const c=cops.pop();if(c)scene.remove(c);}
         for(const c of cops){
           const dx=active.position.x-c.position.x,dz=active.position.z-c.position.z,len=Math.hypot(dx,dz)||1;
-          c.position.x+=(dx/len)*(7+wanted*1.8)*dt;c.position.z+=(dz/len)*(7+wanted*1.8)*dt;c.rotation.y=Math.atan2(dx,dz);
+          c.position.x+=(dx/len)*(7+currentWanted*1.8)*dt;c.position.z+=(dz/len)*(7+wanted*1.8)*dt;c.rotation.y=Math.atan2(dx,dz);
           if(c.position.distanceTo(active.position)<2.5){setWanted(Math.min(5,wanted+1));}
         }
       } else while(cops.length){const c=cops.pop();if(c)scene.remove(c);}
