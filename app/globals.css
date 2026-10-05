@@ -84,3 +84,8 @@
   .phone{width:255px;height:380px}
   .world-copy{bottom:31%;max-width:315px}
 }
+
+.play-hint{position:absolute;z-index:24;left:50%;bottom:24px;transform:translateX(-50%);display:flex;align-items:center;gap:11px;padding:9px 13px;border-radius:9px;background:rgba(4,8,12,.76);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(8px);box-shadow:0 12px 28px rgba(0,0,0,.45);pointer-events:none;white-space:nowrap}
+.play-hint b{font-size:9px;letter-spacing:.16em;color:#63e6ff}
+.play-hint span{font-size:10px;color:#e6ebef}
+@media(max-width:700px){.play-hint{bottom:88px;max-width:calc(100vw - 28px);white-space:normal;text-align:center;justify-content:center}}
