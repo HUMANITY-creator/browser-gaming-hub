@@ -11,13 +11,28 @@ type Ped = {id:number,x:number,y:number,tx:number,ty:number,state:"walk"|"panic"
 type Cop = {id:number,x:number,y:number,angle:number};
 type MissionKind = "delivery"|"escape"|"checkpoint";
 
+type HumanProps = { tone:string; shirt:string; pants:string; hair:string; panic?:boolean; scale?:number };
+const Human = ({tone,shirt,pants,hair,panic=false,scale=1}:HumanProps) => (
+  <div style={{position:"relative",width:34*scale,height:52*scale,filter:"drop-shadow(0 5px 5px #0008)"}}>
+    <div style={{position:"absolute",left:11*scale,top:0,width:13*scale,height:13*scale,borderRadius:"50%",background:tone,border:"1px solid #16191b",zIndex:3}}/>
+    <div style={{position:"absolute",left:10*scale,top:1*scale,width:15*scale,height:7*scale,borderRadius:"9px 9px 4px 4px",background:hair,zIndex:4}}/>
+    <div style={{position:"absolute",left:10*scale,top:12*scale,width:15*scale,height:21*scale,borderRadius:6*scale,background:panic?"#ff9d38":shirt,border:"1px solid #171a1d",zIndex:2}}/>
+    <div style={{position:"absolute",left:4*scale,top:14*scale,width:7*scale,height:20*scale,borderRadius:4*scale,background:shirt,transform:panic?"rotate(-25deg)":"rotate(8deg)",transformOrigin:"top center",zIndex:1}}/>
+    <div style={{position:"absolute",left:24*scale,top:14*scale,width:7*scale,height:20*scale,borderRadius:4*scale,background:shirt,transform:panic?"rotate(25deg)":"rotate(-8deg)",transformOrigin:"top center",zIndex:1}}/>
+    <div style={{position:"absolute",left:10*scale,top:31*scale,width:7*scale,height:19*scale,borderRadius:4*scale,background:pants,transform:panic?"rotate(-8deg)":"rotate(3deg)",transformOrigin:"top center",zIndex:1}}/>
+    <div style={{position:"absolute",left:18*scale,top:31*scale,width:7*scale,height:19*scale,borderRadius:4*scale,background:pants,transform:panic?"rotate(8deg)":"rotate(-3deg)",transformOrigin:"top center",zIndex:1}}/>
+    <div style={{position:"absolute",left:8*scale,top:47*scale,width:9*scale,height:4*scale,borderRadius:3*scale,background:"#17191b"}}/>
+    <div style={{position:"absolute",left:18*scale,top:47*scale,width:9*scale,height:4*scale,borderRadius:3*scale,background:"#17191b"}}/>
+  </div>
+);
+
 export default function ExtraCity() {
   const [p,setP] = useState({x:1500,y:1050});
   const [cars,setCars] = useState<Car[]>(() => Array.from({length:18},(_,i)=>({
     id:i,x:300+((i*431)%2400),y:260+((i*277)%1450),angle:i%2?0:Math.PI/2,
     color:["#e85d5d","#4d8df7","#e8c34d","#63c58a","#a77bf3","#f28b5b"][i%6],speed:45+(i%4)*18
   })));
-  const [peds,setPeds] = useState<Ped[]>(() => Array.from({length:24},(_,i)=>({
+  const [peds,setPeds] = useState<Ped[]>(() => Array.from({length:34},(_,i)=>({
     id:i,x:180+((i*173)%2640),y:180+((i*317)%1640),
     tx:180+(((i*173)+500)%2640),ty:180+(((i*317)+700)%1640),state:"walk"
   })));
@@ -68,7 +83,7 @@ export default function ExtraCity() {
       }
       if(k==="r") setWeather(w=>w==="clear"?"rain":"clear");
       if(k==="g" && d(p,garageSpot)<150){
-        if(garage===0){setGarage(1);setCash(v=>Math.max(0,v-500));setToast("Garage purchased. Vehicle storage unlocked.");}
+        if(garage===0 && cash>=500){setGarage(1);setCash(v=>v-500);setToast("Garage purchased. Vehicle storage unlocked.");} else if(garage===0){setToast("You need $500 for the garage.");}
         else {setToast("Garage: your ride is ready.");}
       }
       if(k==="f" && d(p,shopSpot)<140){
@@ -163,11 +178,11 @@ export default function ExtraCity() {
     {x:0,y:820,w:W,h:170},{x:1180,y:0,w:170,h:H},
     {x:2160,y:0,w:155,h:H},{x:0,y:1450,w:W,h:130}
   ];
-  const buildings=Array.from({length:34},(_,i)=>({x:80+((i*313)%2800),y:70+((i*401)%1800),w:120+(i%3)*45,h:85+(i%2)*35}));
+  const buildings=Array.from({length:48},(_,i)=>({x:80+((i*313)%2800),y:70+((i*401)%1800),w:120+(i%3)*45,h:85+(i%2)*35}));
 
   return <main style={{height:"100vh",background:"#080b0e",color:"#f4f7f9",fontFamily:"Arial,sans-serif",overflow:"hidden"}}>
     <header style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px",background:"#090d10",borderBottom:"1px solid #29343b",position:"relative",zIndex:20}}>
-      <div><div style={{fontWeight:900,letterSpacing:3,fontSize:22}}>EXTRA CITY</div><div style={{fontSize:10,color:"#84919a",letterSpacing:2}}>OPEN-WORLD PROTOTYPE • BUILD 03</div></div>
+      <div><div style={{fontWeight:900,letterSpacing:3,fontSize:22}}>EXTRA CITY</div><div style={{fontSize:10,color:"#84919a",letterSpacing:2}}>OPEN-WORLD PROTOTYPE • BUILD 04 • HUMAN NPCs</div></div>
       <div style={{display:"flex",gap:18,fontWeight:800}}><span style={{color:"#72e3a0"}}>{"$"+cash.toLocaleString()}</span><span style={{color:wanted?"#ff5a5a":"#7d8991",letterSpacing:3}}>{wanted?"★".repeat(wanted):"—"}</span><span style={{color:"#9aa7ae"}}>{weather==="rain"?"RAIN":"CLEAR"}</span></div>
     </header>
     <section style={{position:"relative",height:"calc(100vh - 64px)",overflow:"hidden",background:night?"#18261d":"#426342"}}>
@@ -176,11 +191,11 @@ export default function ExtraCity() {
         {buildings.map((b,i)=><div key={i} style={{position:"absolute",left:b.x,top:b.y,width:b.w,height:b.h,background:i%4===0?"#685149":"#58625b",border:"2px solid #303a35",borderRadius:4,boxShadow:night?"0 0 18px #f4c95d22":"none"}}><div style={{padding:8,fontSize:9,fontWeight:900,color:"#c7ceca"}}>{["MOTEL","AUTO","MARKET","WAREHOUSE"][i%4]}</div></div>)}
         <div style={{position:"absolute",left:shopSpot.x-45,top:shopSpot.y-45,width:90,height:90,border:"2px solid #7ae3a2",borderRadius:12,background:"#17342699",zIndex:3}}><div style={{padding:8,fontSize:10,fontWeight:900,color:"#a9f0c6"}}>CITY STORE</div></div>
         <div style={{position:"absolute",left:garageSpot.x-50,top:garageSpot.y-50,width:100,height:100,border:"2px solid #66b8ff",borderRadius:12,background:"#14314b99",zIndex:3}}><div style={{padding:8,fontSize:10,fontWeight:900,color:"#a9d8ff"}}>GARAGE</div></div>
-        {peds.map(n=><div key={"ped"+n.id} style={{position:"absolute",left:n.x-6,top:n.y-9,width:12,height:18,borderRadius:5,background:n.state==="panic"?"#ffbd55":"#d4d8dc",border:"2px solid #20262a",zIndex:5}}/>)}
+        {peds.map(n=><div key={"ped"+n.id} style={{position:"absolute",left:n.x-17,top:n.y-25,zIndex:5}}><Human tone={["#8d5b3d","#b87952","#d29b72","#6b4534"][n.id%4]} shirt={["#3f78b5","#b44f4f","#d3a63d","#4c9a72","#8a5fb5"][n.id%5]} pants={["#202b38","#3a3a3a","#273d2c","#51402e"][n.id%4]} hair={["#171717","#3b2417","#6b4528","#242424"][n.id%4]} panic={n.state==="panic"} /></div>)}
         {police.map(q=><div key={"police"+q.id} style={{position:"absolute",left:q.x-29,top:q.y-14,width:58,height:28,borderRadius:6,background:"#f2f2f2",border:"2px solid #15191c",transform:"rotate("+q.angle+"rad)",zIndex:8}}><div style={{height:8,background:"#2563eb"}}/><div style={{position:"absolute",right:0,top:0,width:29,height:8,background:"#ef4444"}}/><div style={{position:"absolute",left:8,top:13,width:42,height:6,background:"#20262a",borderRadius:2}}/></div>)}
         {cars.map(c=><div key={c.id} style={{position:"absolute",left:c.x-25,top:c.y-12,width:50,height:24,borderRadius:7,background:c.color,border:c.id===car?"3px solid white":"2px solid #14191c",transform:"rotate("+c.angle+"rad)",zIndex:6,boxShadow:"0 4px 10px #0006"}}><div style={{position:"absolute",left:10,top:4,width:26,height:15,background:"#20282c",borderRadius:3}}/></div>)}
         {mission==="active"&&<div style={{position:"absolute",left:missionTarget.x-48,top:missionTarget.y-48,width:96,height:96,border:"3px solid #ffd84d",borderRadius:"50%",boxShadow:"0 0 35px #ffd84d55",zIndex:4}}/>}
-        <div style={{position:"absolute",left:p.x-12,top:p.y-16,width:24,height:32,borderRadius:8,background:car!==null?"#f1f1f1":"#46b6ff",border:"3px solid #101417",boxShadow:"0 0 18px #46b6ff66",zIndex:10}}/>
+        {car===null&&<div style={{position:"absolute",left:p.x-20,top:p.y-27,zIndex:10}}><Human tone="#b97954" shirt="#256fb8" pants="#20252c" hair="#171717" scale={1.12}/></div>}
         {weather==="rain"&&<div style={{position:"absolute",inset:0,pointerEvents:"none",backgroundImage:"repeating-linear-gradient(105deg,transparent 0,transparent 14px,#9ed8ff33 15px,#9ed8ff33 16px)",opacity:.75}}/>}
       </div>
 
