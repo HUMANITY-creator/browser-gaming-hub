@@ -21,9 +21,13 @@ function makeHuman(palette:number, panic=false){
   const shirt=new THREE.MeshStandardMaterial({color:panic?"#ff8a2a":shirts[palette%shirts.length],roughness:.8});
   const trouser=new THREE.MeshStandardMaterial({color:pants[palette%pants.length],roughness:.9});
   const hair=new THREE.MeshStandardMaterial({color:["#161616","#3b2417","#654126","#252525"][palette%4],roughness:1});
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.23,12,10),skin); head.position.y=1.55;
-  const hairCap=new THREE.Mesh(new THREE.SphereGeometry(.235,12,7,0,Math.PI*2,0,Math.PI*.55),hair); hairCap.position.y=1.62;
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.25,.58,5,8),shirt); body.position.y=1.05;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.235,16,14),skin); head.position.y=1.55;
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.095,.11,.16,10),skin); neck.position.y=1.31;
+  const hairCap=new THREE.Mesh(new THREE.SphereGeometry(.242,16,10,0,Math.PI*2,0,Math.PI*.55),hair); hairCap.position.y=1.64;
+  const eyeMat=new THREE.MeshStandardMaterial({color:"#101820",roughness:.4});
+  const eyeL=new THREE.Mesh(new THREE.SphereGeometry(.025,8,6),eyeMat); eyeL.position.set(-.09,1.57,-.215);
+  const eyeR=eyeL.clone(); eyeR.position.x=.09;
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.255,.62,6,10),shirt); body.position.y=1.04;
   const lArm=new THREE.Mesh(new THREE.CapsuleGeometry(.075,.52,4,6),shirt); lArm.position.set(-.31,1.08,0); lArm.rotation.z=.08;
   const rArm=lArm.clone(); rArm.position.x=.31; rArm.rotation.z=-.08;
   const lLeg=new THREE.Mesh(new THREE.CapsuleGeometry(.09,.62,4,6),trouser); lLeg.position.set(-.13,.45,0);
@@ -31,7 +35,7 @@ function makeHuman(palette:number, panic=false){
   const shoeMat=new THREE.MeshStandardMaterial({color:"#16181a",roughness:1});
   const lShoe=new THREE.Mesh(new THREE.BoxGeometry(.16,.09,.3),shoeMat); lShoe.position.set(-.13,.08,.06);
   const rShoe=lShoe.clone(); rShoe.position.x=.13;
-  g.add(head,hairCap,body,lArm,rArm,lLeg,rLeg,lShoe,rShoe);
+  g.add(head,neck,hairCap,eyeL,eyeR,body,lArm,rArm,lLeg,rLeg,lShoe,rShoe);
   g.userData={lArm,rArm,lLeg,rLeg,walkPhase:palette*.7,baseY:0};
   return g;
 }
@@ -202,6 +206,7 @@ export default function ExtraCity(){
     window.addEventListener("keydown",down); window.addEventListener("keyup",up);
 
     let last=performance.now(),raf=0,elapsed=0;
+    let carVelocity=0;
     const clock=new THREE.Clock();
     const animate=()=>{
       raf=requestAnimationFrame(animate);
@@ -211,16 +216,29 @@ export default function ExtraCity(){
       const currentStage=jobStageRef.current;
       const raining=rainRef.current;
       const currentWanted=wantedRef.current;
-      const speed=driving?13:6.5;
-      if(driving && playerCar){playerCar.position.y=.05;}
       const upKey=keys.has("w")||keys.has("arrowup"), downKey=keys.has("s")||keys.has("arrowdown");
       const left=keys.has("a")||keys.has("arrowleft"), right=keys.has("d")||keys.has("arrowright");
       const active=driving&&playerCar?playerCar:player;
-      const forward=new THREE.Vector3(0,0,-1).applyQuaternion(active.quaternion);
-      if(upKey) active.position.addScaledVector(forward,speed*dt);
-      if(downKey) active.position.addScaledVector(forward,-speed*.62*dt);
-      if(left) active.rotation.y+=dt*(driving?1.8:2.6);
-      if(right) active.rotation.y-=dt*(driving?1.8:2.6);
+      if(driving && playerCar){
+        playerCar.position.y=.05;
+        const throttle=upKey?18:downKey?-11:0;
+        carVelocity += throttle*dt;
+        if(!upKey&&!downKey) carVelocity*=Math.pow(.18,dt);
+        if(downKey && carVelocity>0) carVelocity*=Math.pow(.35,dt);
+        carVelocity=THREE.MathUtils.clamp(carVelocity,-8,24);
+        const steer=(left?1:0)-(right?1:0);
+        const steerScale=THREE.MathUtils.clamp(Math.abs(carVelocity)/8,.18,1);
+        playerCar.rotation.y += -steer*dt*(1.65*steerScale)*(carVelocity>=0?1:-1);
+        const forward=new THREE.Vector3(0,0,-1).applyQuaternion(playerCar.quaternion);
+        playerCar.position.addScaledVector(forward,carVelocity*dt);
+      } else {
+        carVelocity=0;
+        const forward=new THREE.Vector3(0,0,-1).applyQuaternion(player.quaternion);
+        if(upKey) player.position.addScaledVector(forward,6.5*dt);
+        if(downKey) player.position.addScaledVector(forward,-4*dt);
+        if(left) player.rotation.y+=dt*2.6;
+        if(right) player.rotation.y-=dt*2.6;
+      }
       active.position.x=THREE.MathUtils.clamp(active.position.x,-198,198);
       active.position.z=THREE.MathUtils.clamp(active.position.z,-150,150);
 
@@ -282,7 +300,9 @@ export default function ExtraCity(){
         }
       } else while(cops.length){const c=cops.pop();if(c)scene.remove(c);}
 
-      const desired=new THREE.Vector3(active.position.x,active.position.y+5.2,active.position.z+9.5);
+      const cameraDistance=driving?12.5:9.5;
+      const cameraHeight=driving?5.8:5.2;
+      const desired=new THREE.Vector3(active.position.x,active.position.y+cameraHeight,active.position.z+cameraDistance);
       camera.position.lerp(desired,1-Math.pow(.0001,dt));
       camera.lookAt(active.position.x,active.position.y+1.1,active.position.z-3);
 
