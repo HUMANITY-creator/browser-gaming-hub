@@ -31,8 +31,8 @@ export default function Home(){
       e.preventDefault();
       const step=1.8;
       setPosition(prev=>({
-        x:Math.max(28,Math.min(72,prev.x+(k==="a"||k==="arrowleft"?step:k==="d"||k==="arrowright"?-step:0))),
-        y:Math.max(30,Math.min(78,prev.y+(k==="w"||k==="arrowup"?step:k==="s"||k==="arrowdown"?-step:0)))
+        x:Math.max(28,Math.min(72,prev.x+(k==="a"||k==="arrowleft"?-step:k==="d"||k==="arrowright"?step:0))),
+        y:Math.max(30,Math.min(78,prev.y+(k==="w"||k==="arrowup"?-step:k==="s"||k==="arrowdown"?step:0)))
       }));
       if(k==="e") interact();
       if(k==="f") toggleVehicle();
@@ -88,7 +88,7 @@ export default function Home(){
 
         <header className="topbar">
           <div className="logo">CITYLINE<small>FREE OPEN WORLD</small></div>
-          <button className="top-action" onClick={interact}>INTERACT <span>→</span></button>
+          <button className="top-action" onClick={interact} aria-label="Interact">INTERACT <span>→</span></button>
           <div className="wallet">
             <div className="cash-line"><span>◉</span> ${cash.toLocaleString()}</div>
             <div className="level-row"><b>LEVEL {level}</b><i><em style={{width:`${xp/10}%`}}/></i><small>{xp}/1,000</small></div>
@@ -161,7 +161,7 @@ export default function Home(){
         </div>
 
         {!phoneOpen && <button className="phone-launch" onClick={()=>setPhoneOpen(true)}>📱</button>}
-        <div className="toast">{toast}</div>
+        <div className="play-hint"><b>PLAYABLE</b><span>Click the city, then use W A S D. E = interact · F = vehicle · M = phone</span></div>\n        <div className="toast">{toast}</div>
       </section>
     </main>
   );
